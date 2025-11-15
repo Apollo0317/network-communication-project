@@ -1,13 +1,13 @@
 """
-Cable (Channel) Simulation Class
-This is the infrastructure provided by the course to simulate physical transmission medium
+Modulator and DeModulator for 16-QAM scheme
+
+Provides phy layer interface
 """
 import numpy as np
 import matplotlib.pyplot as plt
-from typing import Optional
 from scipy import signal
 import json
-import struct
+import time
 from cable import Cable
 
 class Modulator:
@@ -69,7 +69,7 @@ class Modulator:
         grouped_bit_list=[]
         for i in range(0, len(bit_list), bit_per_symbol):
             grouped_bit_list.append([bit_list[i],bit_list[i+1],bit_list[i+2],bit_list[i+3]])
-        print(grouped_bit_list)
+        #print(grouped_bit_list)
         symbols= [self.mapping.get(str(bit_group)) for bit_group in grouped_bit_list]
         return symbols
     
@@ -147,7 +147,7 @@ class Modulator:
     def modulate(self, data:bytes)->np.ndarray:
         symbols= self.QAM(byte_data=data)
         #print(f'symbols: {symbols}')
-        signal= self.QAM_UpConverter(symbols=symbols, debug=True)
+        signal= self.QAM_UpConverter(symbols=symbols, debug=False)
         return signal
 
 class DeModulator:
@@ -244,7 +244,7 @@ class DeModulator:
         pass
 
     def demodulate(self, signal:np.ndarray)->bytes:
-        symbols= self.QAM_DownConverter(qam_signal=signal)
+        symbols= self.QAM_DownConverter(qam_signal=signal, debug=False)
         bits= self.Detect_Symbol(symbols=symbols)
         byte_recovered= self.bits_to_bytes(bit_list=bits)
         return byte_recovered
@@ -254,13 +254,14 @@ class DeModulator:
 def test():
     modulator=Modulator(scheme='16QAM', symbol_rate=1e6, sample_rate=50e6, fc=2e6)
     demodulator= DeModulator(scheme='16QAM', symbol_rate=1e6, sample_rate=50e6, fc=2e6)
-    test_str=b'fuck you! hahaha'
+    test_str=b'Hello, this is a test string for QAM modulation and demodulation over a simulated cable channel. '
+    start_time= time.time()
     qam_signal= modulator.modulate(data=test_str)
         # Create cable (with debug mode enabled)
     cable = Cable(
         length=100,           # 100 meters
-        attenuation=0.2,      # Attenuation coefficient
-        noise_level=0.5,     # Noise level
+        attenuation=0.1,      # Attenuation coefficient
+        noise_level=0.8,     # Noise level
         debug_mode=False      # Set to True to see waveforms
     )
     
@@ -269,7 +270,10 @@ def test():
     recv_signal= cable.transmit(signal=qam_signal)
     #print(demodulator.mapping)
     recv_str= demodulator.demodulate(signal=recv_signal)
-    print(f'send:{test_str}\nrecv:{recv_str}')
+    cost= time.time()-start_time
+    print(f'orig:{test_str[:64]}...')
+    print(f'recv:{recv_str[:64]}...')
+    print(f'cost:{cost}s')
     pass
 
 if __name__=='__main__':
