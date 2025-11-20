@@ -510,43 +510,89 @@ def test():
     """
     Test function: verify modulation and demodulation functionality
     
-    Creates modulator and demodulator, transmits test data through Cable channel
+    Now supports both synchronous and asynchronous simulation modes
     """
+    import sys
+    sys.path.append('..')  # 添加父目录到路径
+    
+    from core.simulator import PhySimulationEngine, SimulationEntity
+    from phy.entity import TxEntity, ChannelEntity, RxEntity
+    
+    # 创建调制解调器
     modulator = Modulator(
         scheme="16QAM", symbol_rate=1e6, sample_rate=50e6, fc=2e6, power_factor=100
     )
     demodulator = DeModulator(
         scheme="16QAM", symbol_rate=1e6, sample_rate=50e6, fc=2e6, power_factor=100
     )
-    test_str = b"Happy New Year!"
-    start_time = time.time()
     
-    # Create transmission channel
+    # 创建信道
     cable = Cable(
-        length=100,  # 100 meters
-        attenuation=3,  # Attenuation coefficient
-        noise_level=3,  # Noise level
+        length=100,
+        attenuation=2,
+        noise_level=3,
         debug_mode=False,
     )
     print(f"\n{cable}")
     
-    test_sample_num = 1024
-
-    # Transmit through channel
+    # 测试数据
+    test_str = b"aloha! I like luguan"
+    test_sample_num = 1000  # 减少数量以便观察异步行为
+    
+    # 计算传播延迟（ticks）
+    propagation_delay_s = cable.get_propagation_delay()
+    time_step_us = 1.0
+    propagation_delay_ticks = int(propagation_delay_s / (time_step_us * 1e-6))
+    
+    print(f"Propagation delay: {propagation_delay_s*1e6:.2f} μs = {propagation_delay_ticks} ticks")
+    
+    # 创建实体
+    tx = TxEntity(modulator, name="Tx-Node")
+    channel = ChannelEntity(cable, propagation_delay_ticks, name="Cable-Channel")
+    rx = RxEntity(demodulator, name="Rx-Node")
+    
+    # 预先将数据加入发送队列
     for i in range(test_sample_num):
-        # Modulation
-        qam_signal = modulator.modulate(data=test_str)
-        recv_signal = cable.transmit(signal=qam_signal)
-        
-        # Demodulation
-        recv_str = demodulator.demodulate(signal=recv_signal)
-        
-        print(f"{i}th: orig:{test_str[:64]}")
-        print(f"{i}th: recv:{recv_str[:64]}")
+        tx.enqueue_data(test_str)
+    
+    # 创建仿真引擎
+    engine = PhySimulationEngine(time_step_us=time_step_us, realtime_mode=True)
+    
+    # 注册实体（注意顺序：Tx -> Channel -> Rx）
+    engine.register_entity(tx)
+    engine.register_entity(channel)
+    engine.register_entity(rx)
 
+    tx.connect_to_channel(channel)
+    channel.connect_receiver(rx)
+
+    # 运行仿真
+    # 需要足够的ticks以完成所有传输
+    duration_ticks = test_sample_num + propagation_delay_ticks + 100
+    
+    import time
+    start_time = time.time()
+    engine.run(duration_ticks=duration_ticks*10)
     cost = time.time() - start_time
-
-    print(f"{test_sample_num*len(test_str) / 1000 / cost} KBps")
+    
+    # 打印统计
+    print("\n" + "="*60)
+    print("Simulation Statistics:")
+    print(f"Tx: {tx.get_stats()}")
+    print(f"Channel: {channel.get_stats()}")
+    print(f"Rx: {rx.get_stats()}")
+    
+    # 验证数据
+    success_count = 0
+    while rx.rx_buffer:
+        recv_data = rx.get_received_data()
+        print(f"rx: {recv_data} tx: {test_str}")
+        if recv_data == test_str:
+            success_count += 1
+    
+    print(f"\nData verification: {success_count}/{test_sample_num} packets correct")
+    print(f"Throughput: {test_sample_num*len(test_str) / 1000 / cost:.2f} KBps")
+    print("="*60)
 
 
 if __name__ == "__main__":
