@@ -10,9 +10,13 @@ from core.simulator import SimulationEntity
 class ChannelEntity(SimulationEntity):
     """信道实体：连接 Tx 和 Rx 的媒介"""
     
-    def __init__(self, cable, propagation_delay_ticks: int = 0, name: str = "Channel"):
+    def __init__(self, cable, name: str = "Channel"):
         super().__init__(name)
         self.cable = cable
+
+        propagation_delay_s = cable.get_propagation_delay()
+        time_step_us = 1.0
+        propagation_delay_ticks = int(propagation_delay_s / (time_step_us * 1e-6))
         self.propagation_delay_ticks = propagation_delay_ticks
         
         # 目标接收者列表 (支持广播)

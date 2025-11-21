@@ -11,7 +11,7 @@ from scipy import signal
 import json
 import time
 import numba
-from cable import Cable
+from phy.cable import Cable
 
 
 class Modulator:
@@ -556,9 +556,8 @@ def test():
         tx.enqueue_data(test_str)
     
     # 创建仿真引擎
-    engine = PhySimulationEngine(time_step_us=time_step_us, realtime_mode=True)
+    engine = PhySimulationEngine(time_step_us=time_step_us, realtime_mode=False)
     
-    # 注册实体（注意顺序：Tx -> Channel -> Rx）
     engine.register_entity(tx)
     engine.register_entity(channel)
     engine.register_entity(rx)
