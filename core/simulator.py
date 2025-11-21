@@ -28,6 +28,9 @@ class SimulationEntity(abc.ABC):
         """重置实体状态"""
         self.current_tick = 0
 
+    def set_name(self, name:str):
+        self.name= name
+
     def __str__(self):
         return f"SimulationEntity({self.name})"
 

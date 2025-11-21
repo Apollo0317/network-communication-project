@@ -16,3 +16,5 @@
 │ - modulator       │ - cable            │ - demodulator
 │ - tx_state        │ - propagation_delay│ - rx_state
 └──────────────┘      └──────────────┘      └──────────────┘
+
+Do not forget registe entity!

@@ -12,21 +12,27 @@ HEADER = b"\xaa\xbb"
 
 
 class NetworkInterface:
-    def __init__(self, mac_addr: str, name: str = "eth0"):
+    def __init__(self, mac_addr: int, mode: str = "node", name: str = "eth0"):
         self.mac_addr = mac_addr
         self.name = name
         self.header = HEADER
+        self.mode = mode
 
-    def encoding(self, dst_mac: str, data: bytes) -> bytes:
+    def encoding(self, dst_mac: int, data: bytes, src_mac: int = None) -> bytes:
         lens = 1 + 1 + 1 + len(data)
-        header = struct.pack("!2sHBB", self.header, lens, self.mac_addr, dst_mac)
+        if self.mode == "node":
+            src_mac = self.mac_addr
+        header = struct.pack("!2sHBB", self.header, lens, src_mac, dst_mac)
         # header = struct.pack("!2sHBB", b'\xaa\xbb', 6, '1', '2')
         raw_frame = header + data
         crc = zlib.crc32(raw_frame)
         frame = raw_frame + struct.pack("!I", crc)
         return frame
 
-    def decoding(self, frame: bytes) -> tuple[str, bytes] | None:
+    def decoding(self, frame: bytes) -> tuple[int, int, bytes] | None:
+        """
+        Return: (src_mac, dst_mac, data) or None
+        """
         if len(frame) < 2 + 2 + 1 + 1 + 4:
             return None
         if frame[:2] != self.header:
@@ -41,14 +47,14 @@ class NetworkInterface:
 
         _, lens, src_mac, dst_mac = struct.unpack("!2sHBB", frame[:6])
 
-        if dst_mac != self.mac_addr:
+        if dst_mac != self.mac_addr and self.mode == "node":
             print(
                 f"[{self.name}] MAC Address Mismatch: dst {dst_mac}, self {self.mac_addr}"
             )
             raise ValueError("MAC Address Mismatch")
 
         data = frame[6:-4]
-        return src_mac, data
+        return src_mac, dst_mac, data
 
 
 def test():

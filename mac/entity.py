@@ -12,16 +12,53 @@ from core.simulator import PhySimulationEngine, SimulationEntity
 from mac.protocol import NetworkInterface
 
 
+class TwistedPair:
+    def __init__(self, cable: Cable, simulator: PhySimulationEngine):
+        channel_a = ChannelEntity(cable=cable, name="channel_a")
+        channel_b = ChannelEntity(cable=cable, name="channel_b")
+        simulator.register_entity(entity=channel_a)
+        simulator.register_entity(entity=channel_b)
+        self.channel_a = channel_a
+        self.channel_b = channel_b
+        self.connected_count = 0  # 使用计数器替代布尔值，更清晰
+
+    def connect(self, tx_interface: TxEntity, rx_interface: RxEntity):
+        """
+        将物理层接口连接到双绞线。
+        自动处理交叉连接：
+        - 第1个设备:Tx -> Channel A, Channel B -> Rx
+        - 第2个设备:Tx -> Channel B, Channel A -> Rx
+        """
+        if self.connected_count == 0:
+            tx_interface.connect_to_channel(self.channel_a)
+            self.channel_b.connect_receiver(rx_interface)
+            self.connected_count += 1
+        elif self.connected_count == 1:
+            tx_interface.connect_to_channel(self.channel_b)
+            self.channel_a.connect_receiver(rx_interface)
+            self.connected_count += 1
+        else:
+            raise ConnectionError(
+                "TwistedPair is already fully connected (max 2 devices)."
+            )
+
+
 class MacTxEntity(SimulationEntity):
-    def __init__(self, name: str, phy_entity: TxEntity, mac_addr: str):
+    def __init__(
+        self, name: str, phy_entity: TxEntity, mac_addr: str, mode: str = "node"
+    ):
         super().__init__(name)
         self.phy_interface = phy_entity
         self.mac_addr = mac_addr
-        self.ni = NetworkInterface(mac_addr=mac_addr, name=name)
+        self.ni = NetworkInterface(mac_addr=mac_addr, name=name, mode=mode)
 
-    def send(self, dst_mac: str, data: bytes):
+    def send(self, dst_mac: str, data: bytes, src_mac: int = None):
         print(f"dst_mac:{dst_mac} data:{data}")
-        frame = self.ni.encoding(dst_mac=dst_mac, data=data)
+        if self.ni.mode == "node":
+            frame = self.ni.encoding(dst_mac=dst_mac, data=data)
+        else:  # switcher mode
+            frame = self.ni.encoding(src_mac=src_mac, dst_mac=dst_mac, data=data)
+
         self.phy_interface.enqueue_data(data=frame)
 
     def update(self, tick: int):
@@ -29,30 +66,32 @@ class MacTxEntity(SimulationEntity):
 
 
 class MacRxEntity(SimulationEntity):
-    def __init__(self, name: str, phy_entity: RxEntity, mac_addr: str):
+    def __init__(
+        self, name: str, phy_entity: RxEntity, mac_addr: str, mode: str = "node"
+    ):
         super().__init__(name)
         self.phy_interface = phy_entity
         self.mac_addr = mac_addr
-        self.ni = NetworkInterface(mac_addr=mac_addr, name=name)
-        self.rx_queue: list[tuple[int, bytes]] = []
+        self.ni = NetworkInterface(mac_addr=mac_addr, name=name, mode=mode)
+        self.rx_queue: list[tuple[int, int, bytes]] = []
 
     def update(self, tick):
         frame = self.phy_interface.get_received_data()
         if frame:
             try:
-                src_mac, data = self.ni.decoding(frame)
+                src_mac, dst_mac, data = self.ni.decoding(frame)
             except ValueError as e:
                 print(f"[{self.name}] Error decoding frame: {e}")
                 return
             else:
-                self.rx_queue.append((src_mac, data))
+                self.rx_queue.append((src_mac, dst_mac, data))
 
-    def recieve(self) -> tuple[int, bytes] | None:
+    def recieve(self) -> tuple[int, int, bytes] | None:
         if self.rx_queue:
             return self.rx_queue.pop(0)
         return None
 
-    def recieve_all(self) -> list[tuple[int, bytes]]:
+    def recieve_all(self) -> list[tuple[int, int, bytes]]:
         results = self.rx_queue.copy()
         self.rx_queue.clear()
         return results
