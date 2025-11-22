@@ -11,11 +11,9 @@ import sys
 sys.path.append("..")  # 添加父目录到路径
 
 from phy.modulator import Modulator, DeModulator, Cable
-from phy.entity import TxEntity, RxEntity, ChannelEntity
-from mac.entity import MacTxEntity, MacRxEntity, TwistedPair
+from phy.entity import TxEntity, RxEntity, TwistedPair
+from mac.entity import MacTxEntity, MacRxEntity
 from core.simulator import PhySimulationEngine, SimulationEntity
-
-import copy
 
 
 class Node(SimulationEntity):
@@ -56,6 +54,7 @@ class Node(SimulationEntity):
         self.mac_rx = mac_rx
         self.mac_addr = mac_addr
         self.name = name
+        self.update = lambda tick: None  # default empty update function
 
         print(f"Host {name}:{mac_addr} init ok")
 
@@ -74,16 +73,11 @@ class Node(SimulationEntity):
     def recvall(self) -> list[tuple[str, bytes]]:
         return self.mac_rx.recieve_all()
 
+    def set_event(self, method):
+        self.update = method
+
     def update(self, tick):
-        # super().update(tick)
-        # if tick % 2000 == 0:
-        #     self.send(dst_mac=2, data=f'{self.name} send at {tick}'.encode())
-        #     print(f'send at {tick}')
-        # if tick % 100 ==0:
-        #     result= self.recv()
-        #     if result:
-        #         print(f'recv msg from {result[0]}:{result[1]}')
-        pass
+        self.update(tick)
 
 
 class Switcher(SimulationEntity):
@@ -156,12 +150,12 @@ class Switcher(SimulationEntity):
                         dst_mac_tx, _ = self.port_list[dst_port]
                         dst_mac_tx.send(src_mac=src_mac, dst_mac=dst_mac, data=data)
                     else:
-                        # TODO: imply flood algo
+                        # TODO: imply flooding algorithm
                         pass
 
 
 def test():
-    simulator = PhySimulationEngine(time_step_us=1)
+    simulator = PhySimulationEngine(time_step_us=1, realtime_mode=True)
 
     node_a = Node(simulator=simulator, mac_addr=1, name="node_a")
     node_b = Node(simulator=simulator, mac_addr=2, name="node_b")
@@ -196,11 +190,15 @@ def test():
     node_b.send(dst_mac=3, data=b"Hi, I am node b!")
     node_c.send(dst_mac=1, data=b"Hi, I am node c!")
 
-    simulator.run(5000)
+    node_a.send(dst_mac=1, data=b"Hi, I am node a!")
+    node_b.send(dst_mac=2, data=b"Hi, I am node b!")
+    node_c.send(dst_mac=3, data=b"Hi, I am node c!")
 
-    print(f"a recv: {node_a.recv()}")
-    print(f"b recv: {node_b.recv()}")
-    print(f"c recv: {node_c.recv()}")
+    simulator.run(10000)
+
+    print(f"a recv: {node_a.recvall()}")
+    print(f"b recv: {node_b.recvall()}")
+    print(f"c recv: {node_c.recvall()}")
 
 
 if __name__ == "__main__":
