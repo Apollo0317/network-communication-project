@@ -18,10 +18,10 @@ class NetworkInterface:
         self.header = HEADER
         self.mode = mode
 
-    def encoding(self, dst_mac: int, data: bytes, src_mac: int = None) -> bytes:
+    def encoding(self, dst_mac: int, data: bytes, src_mac: int) -> bytes:
         lens = 1 + 1 + 1 + len(data)
-        if self.mode == "node":
-            src_mac = self.mac_addr
+        # if self.mode == "node":
+        #     src_mac = self.mac_addr
         header = struct.pack("!2sHBB", self.header, lens, src_mac, dst_mac)
         # header = struct.pack("!2sHBB", b'\xaa\xbb', 6, '1', '2')
         raw_frame = header + data

@@ -5,7 +5,8 @@ Physical Layer Simulation Entities
 from collections import deque
 from typing import Optional, List
 import numpy as np
-from core.simulator import SimulationEntity
+from core.simulator import SimulationEntity, PhySimulationEngine
+from phy.modulator import Cable
 
 class ChannelEntity(SimulationEntity):
     """信道实体：连接 Tx 和 Rx 的媒介"""
@@ -151,3 +152,33 @@ class RxEntity(SimulationEntity):
 
     def get_stats(self):
         return self.stats
+
+class TwistedPair:
+    def __init__(self, cable: Cable, simulator: PhySimulationEngine):
+        channel_a = ChannelEntity(cable=cable, name="channel_a")
+        channel_b = ChannelEntity(cable=cable, name="channel_b")
+        simulator.register_entity(entity=channel_a)
+        simulator.register_entity(entity=channel_b)
+        self.channel_a = channel_a
+        self.channel_b = channel_b
+        self.connected_count = 0  # 使用计数器替代布尔值，更清晰
+
+    def connect(self, tx_interface: TxEntity, rx_interface: RxEntity):
+        """
+        将物理层接口连接到双绞线。
+        自动处理交叉连接：
+        - 第1个设备:Tx -> Channel A, Channel B -> Rx
+        - 第2个设备:Tx -> Channel B, Channel A -> Rx
+        """
+        if self.connected_count == 0:
+            tx_interface.connect_to_channel(self.channel_a)
+            self.channel_b.connect_receiver(rx_interface)
+            self.connected_count += 1
+        elif self.connected_count == 1:
+            tx_interface.connect_to_channel(self.channel_b)
+            self.channel_a.connect_receiver(rx_interface)
+            self.connected_count += 1
+        else:
+            raise ConnectionError(
+                "TwistedPair is already fully connected (max 2 devices)."
+            )
