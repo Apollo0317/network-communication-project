@@ -2,6 +2,7 @@ from core.ProtocolStack import ProtocolLayer
 from core.simulator import PhySimulationEngine
 from phy.modulator import Modulator, DeModulator
 from phy.entity import TxEntity, RxEntity, TwistedPair
+from phy.Coding import ChannelEncoder
 
 
 class PhyLayer(ProtocolLayer):
@@ -17,6 +18,8 @@ class PhyLayer(ProtocolLayer):
         self.rx_entity= RxEntity(demodulator=demodulator, name=name+"_phy_rx")
         simulator.register_entity(entity=self.tx_entity)
         simulator.register_entity(entity=self.rx_entity)
+        self.channel_encoder= ChannelEncoder()
+        self.use_channel_coding= True
 
     def connect_to(self, twisted_pair: TwistedPair):
         twisted_pair.connect(
@@ -30,15 +33,19 @@ class PhyLayer(ProtocolLayer):
 
     def Encapsulate(self, data):
         """
-        should never be called in phy layer!
+        #TODO imply channel coding
         """
+        if self.use_channel_coding:
+            return self.channel_encoder.encoding(data=data)
         return data
         pass
 
     def Dencapsulate(self, data):
         """
-        should never be called in phy layer!
+        TODO imply channel decoding
         """
+        if self.use_channel_coding:
+            return self.channel_encoder.decoding(data=data)
         return data
     
     def update(self, tick):

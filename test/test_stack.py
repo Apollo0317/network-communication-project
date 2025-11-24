@@ -57,8 +57,8 @@ def test_mac_phy_integration():
     # 创建信道
     cable = Cable(
         length=100,
-        attenuation=2,
-        noise_level=3,
+        attenuation=4,
+        noise_level=3.5,
         debug_mode=False,
     )
     print(f"\n{cable}")
@@ -74,9 +74,9 @@ def test_mac_phy_integration():
     switcher.connect_to(port=2, twisted_pair=tp3)
 
     test_data= b'Hello, this is a test message.'
-    node1.send(1, data=b'Hello Node 1, this is Node 1.')
-    node2.send(1, data=b'Hello Node 1, this is Node 2.')
-    node3.send(1, data=b'Hello Node 1, this is Node 3.')
+    node1.send(2, data=b'Hello, this is Node 1.')
+    node2.send(3, data=b'Hello, this is Node 2.')
+    node3.send(1, data=b'Hello, this is Node 3.')
 
     simulator.run(duration_ticks=1000)
 
