@@ -18,3 +18,4 @@
 └──────────────┘      └──────────────┘      └──────────────┘
 
 Do not forget to register entity!
+This is a test commit
