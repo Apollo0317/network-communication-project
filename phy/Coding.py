@@ -109,9 +109,9 @@ class Hamming:
         ep = self.parityCheck(message)
         pos = self._binatodeci(ep)
         if pos > 0:
-            print(
-                f"bit flip in {pos - 1}th bit: {message[pos - 1][0] ^ 1}->{message[pos - 1][0]}"
-            )
+            # print(
+            #     f"bit flip in {pos - 1}th bit: {message[pos - 1][0] ^ 1}->{message[pos - 1][0]}"
+            # )
             correctMessage = self._flipbit(message, pos)
         else:
             correctMessage = message
@@ -175,7 +175,7 @@ class ChannelEncoder:
         # Zero padding to align to k-bit boundaries
         if remain_bit:
             zero_pad = [0] * (self.k - remain_bit)
-            print(f"pad zero during enc: {len(zero_pad)}")
+            #print(f"pad zero during enc: {len(zero_pad)}")
             bit_list.extend(zero_pad)
             # Group bits into chunks of 4
         grouped_bit_list = []
@@ -194,7 +194,7 @@ class ChannelEncoder:
         # Zero padding to align to k-bit boundaries
         if remain_bit:
             zero_pad = [0] * (self.n - remain_bit)
-            print(f"pad zero during dec: {len(zero_pad)}")
+            #print(f"pad zero during dec: {len(zero_pad)}")
             bit_list.extend(zero_pad)
             # Group bits into chunks of 4
         decoded_bit_list: list[int] = []
@@ -214,7 +214,7 @@ class ChannelEncoder:
         # Zero padding to align to k-bit boundaries
         if remain_bit:
             zero_pad = [0] * (self.byte_length - remain_bit)
-            print(f"pad zero during enc_1: {len(zero_pad)}")
+            #print(f"pad zero during enc_1: {len(zero_pad)}")
             encoded_bit_list.extend(zero_pad)
         return self.bits_to_bytes(bits=encoded_bit_list)
 

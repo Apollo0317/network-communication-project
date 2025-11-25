@@ -12,6 +12,7 @@ class ProtocolLayer(SimulationEntity):
         self.upper_layer: Optional[Self]= None
         if self.lower_layer:
             self.lower_layer.upper_layer= self
+        self.simulator= simulator
         simulator.register_entity(self)
         pass
         

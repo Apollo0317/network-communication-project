@@ -34,7 +34,7 @@ class MacLayer(ProtocolLayer):
             print(f"[MAC Layer {self.name}] Frame decoding error: {e}")
             return None
         else:
-            if self.ni.mode == 'node':
-                return data[-1]
+            # if self.ni.mode == 'node':
+            #     return data[-1]
             return data  # (src_mac, dst_mac, payload)
         
