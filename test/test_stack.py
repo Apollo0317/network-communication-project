@@ -3,7 +3,9 @@ import sys
 sys.path.append("..")  # 添加父目录到路径
 from phy import PhyLayer, TwistedPair, Cable
 from mac import MacLayer, Switcher
+from tcp.TransportLayer import TransportLayer_GBN, TransportLayer_SR
 from core import PhySimulationEngine, SimulationEntity
+from functools import reduce
 import rich.live
 
 class TestNode(SimulationEntity):
@@ -15,7 +17,8 @@ class TestNode(SimulationEntity):
                     simulator=simulator,mode=mode, 
                     mac_addr=mac_addr, name=name
                 )
-        self.socket_layer= self.mac_layer
+        self.tcp_layer= TransportLayer_SR(lower_layer=self.mac_layer, simulator=simulator, name=name)
+        self.socket_layer= self.tcp_layer
         self.mac_addr= mac_addr
         self.name= name
         simulator.register_entity(self)
@@ -40,7 +43,8 @@ class TestNode(SimulationEntity):
             if data is None:
                 break
             data_list.append(data)
-        return data_list
+        data_combined= reduce(lambda x, y: x + y, data_list, b'')
+        return data_combined
     
 
 def test_mac_phy_integration():
@@ -54,7 +58,7 @@ def test_mac_phy_integration():
     cable = Cable(
         length=100,
         attenuation=4,
-        noise_level=3.5,
+        noise_level=4.5,
         debug_mode=False,
     )
     print(f"\n{cable}")
@@ -70,11 +74,11 @@ def test_mac_phy_integration():
     switcher.connect_to(port=2, twisted_pair=tp3)
 
     test_data= b'Hello, this is a test message.'
-    node1.send(2, data=b'Hello, this is Node 1.')
-    node2.send(3, data=b'Hello, this is Node 2.')
-    node3.send(1, data=b'Hello, this is Node 3.')
+    node1.send(2, data=b'Hello, this is Node 1.'*4)
+    node2.send(3, data=b'Hello, this is Node 2.'*4)
+    node3.send(1, data=b'Hello, this is Node 3.'*4)
 
-    simulator.run(duration_ticks=1000)
+    simulator.run(duration_ticks=6000)
 
     node_1_received= node1.recv_all()
     node_2_received= node2.recv_all()
