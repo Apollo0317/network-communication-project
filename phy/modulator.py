@@ -17,10 +17,10 @@ from phy.cable import Cable
 class Modulator:
     """
     16-QAM Modulator
-    
+
     Modulates byte data into QAM signals for physical layer transmission
     """
-    
+
     def __init__(
         self,
         scheme: str,
@@ -31,7 +31,7 @@ class Modulator:
     ):
         """
         Initialize the modulator
-        
+
         Args:
             scheme: Modulation scheme (e.g., "16QAM")
             symbol_rate: Symbol rate in symbols/second
@@ -52,10 +52,10 @@ class Modulator:
     def bytes_to_bits(byte_data: bytes) -> list:
         """
         Convert byte data to bit list
-        
+
         Args:
             byte_data: Input byte data
-            
+
         Returns:
             Bit list, each byte converted to 8 bits (MSB first)
         """
@@ -69,13 +69,13 @@ class Modulator:
     def generate_QAM_mapping(order: int = 16) -> dict[str, list]:
         """
         Generate 16-QAM constellation mapping
-        
+
         Uses Gray coding to map 4 bits to I/Q channels (2 bits each)
         Constellation points: I, Q ∈ {-3, -1, 1, 3}
-        
+
         Args:
             order: QAM order, default 16
-            
+
         Returns:
             Mapping dictionary, key is bit list string, value is [I, Q] coordinates
         """
@@ -85,7 +85,7 @@ class Modulator:
             bit_list = [(code >> i) & 1 for i in range(3, -1, -1)]
             # First 2 bits map to I channel, last 2 bits map to Q channel
             I_bit, Q_bit = bit_list[:2], bit_list[2:]
-            
+
             # Gray coding mapping: 00->-3, 01->-1, 11->1, 10->3
             if I_bit == [0, 0]:
                 I_out = -3
@@ -95,7 +95,7 @@ class Modulator:
                 I_out = 1
             else:
                 I_out = 3
-                
+
             if Q_bit == [0, 0]:
                 Q_out = -3
             elif Q_bit == [0, 1]:
@@ -104,17 +104,17 @@ class Modulator:
                 Q_out = 1
             else:
                 Q_out = 3
-                
+
             mapping[str(bit_list)] = [I_out, Q_out]
         return mapping
 
     def Set_Frequency(self, fc: int):
         """
         Set carrier frequency
-        
+
         Args:
             fc: New carrier frequency in Hz
-            
+
         Raises:
             ValueError: Raised when frequency is negative
         """
@@ -126,12 +126,12 @@ class Modulator:
     def QAM(self, byte_data: bytes) -> list:
         """
         Map byte data to QAM symbols
-        
+
         Adds 4 training symbols at the beginning for channel estimation on first call
-        
+
         Args:
             byte_data: Input byte data
-            
+
         Returns:
             Symbol list, each symbol is [I, Q] coordinates
         """
@@ -139,23 +139,23 @@ class Modulator:
         bit_per_symbol = 4  # 16-QAM uses 4 bits per symbol
         length = len(bit_list)
         remain_bit = length % bit_per_symbol
-        
+
         # Zero padding to align to 4-bit boundaries
         if remain_bit:
             zero_pad = [0] * (bit_per_symbol - remain_bit)
             print(f"pad zero: {len(zero_pad)}")
             bit_list.extend(zero_pad)
-            
+
         # Group bits into chunks of 4
         grouped_bit_list = []
         for i in range(0, len(bit_list), bit_per_symbol):
             grouped_bit_list.append(
                 [bit_list[i], bit_list[i + 1], bit_list[i + 2], bit_list[i + 3]]
             )
-            
+
         # Generate symbols using mapping table
         symbols = [self.mapping.get(str(bit_group)) for bit_group in grouped_bit_list]
-        
+
         # Add training symbols on first transmission
         if not self.has_estimated:
             train_symbols = [[1, 3], [3, 1], [-1, -3], [-3, -1]]
@@ -169,23 +169,23 @@ class Modulator:
     def QAM_UpConverter(self, symbols: list[list], debug=False) -> np.ndarray:
         """
         QAM upconverter: modulate baseband symbols to carrier frequency
-        
+
         Processing steps:
         1. Convert symbols to complex form
         2. Pulse shaping (currently using rectangular filter)
         3. Quadrature modulation to carrier
-        
+
         Args:
             symbols: Symbol list, each symbol is [I, Q]
             debug: Whether to plot debug waveforms
-            
+
         Returns:
             Modulated time-domain RF signal
         """
         # Convert to complex symbols
         symbols: list[complex] = [complex(symbol[0], symbol[1]) for symbol in symbols]
         complex_symbols = np.array(symbols, dtype=np.complex128)
-        
+
         # Calculate samples per symbol
         sps = self.sample_rate / self.symbol_rate
         I_baseband = np.real(complex_symbols)
@@ -255,10 +255,10 @@ class Modulator:
     def modulate(self, data: bytes) -> np.ndarray:
         """
         Modulation entry function
-        
+
         Args:
             data: Byte data to be modulated
-            
+
         Returns:
             Modulated RF signal
         """
@@ -271,10 +271,10 @@ class Modulator:
 class DeModulator:
     """
     16-QAM Demodulator
-    
+
     Demodulates received QAM signals back to byte data
     """
-    
+
     def __init__(
         self,
         scheme: str,
@@ -285,7 +285,7 @@ class DeModulator:
     ):
         """
         Initialize the demodulator
-        
+
         Args:
             scheme: Modulation scheme
             symbol_rate: Symbol rate
@@ -306,10 +306,10 @@ class DeModulator:
     def generate_QAM_mapping(order: int = 16) -> dict[str, list]:
         """
         Generate reverse QAM mapping (constellation points to bits)
-        
+
         Args:
             order: QAM order
-            
+
         Returns:
             Reverse mapping dictionary, key is [I,Q] coordinate string, value is bit list
         """
@@ -324,17 +324,17 @@ class DeModulator:
     def bits_to_bytes(bit_list: list[int]) -> bytes:
         """
         Convert bit list to bytes
-        
+
         Args:
             bit_list: Bit list
-            
+
         Returns:
             Byte data
         """
         bit_num = len(bit_list)
         byte_list = bytearray()
         byte_num = int(bit_num / 8)
-        
+
         for i in range(0, byte_num):
             bits_of_byte = bit_list[i * 8 : (i + 1) * 8]
             value = 0
@@ -349,11 +349,11 @@ class DeModulator:
     def distance(a: list[float, 2], b: list[float, 2]) -> float:
         """
         Calculate squared Euclidean distance between two constellation points
-        
+
         Args:
             a: First point [I, Q]
             b: Second point [I, Q]
-            
+
         Returns:
             Squared distance
         """
@@ -364,10 +364,10 @@ class DeModulator:
     def symbol_power(symbol: list[int, 2]) -> float:
         """
         Calculate symbol power
-        
+
         Args:
             symbol: Symbol [I, Q]
-            
+
         Returns:
             Symbol power I²+Q²
         """
@@ -376,12 +376,12 @@ class DeModulator:
     def Detect_Symbol(self, symbols: list[list]) -> list[int]:
         """
         Symbol detection: map received symbols back to bits
-        
+
         Uses minimum Euclidean distance decision, performs channel estimation on first reception
-        
+
         Args:
             symbols: Received symbol list
-            
+
         Returns:
             Detected bit list
         """
@@ -394,7 +394,7 @@ class DeModulator:
             std_train_symbols = [[1, 3], [3, 1], [-1, -3], [-3, -1]]
             recv_train_symbols = symbols[:4]
             symbols = symbols[4:]
-            
+
             # Calculate amplitude loss coefficient
             std_symbol_powers = map(self.symbol_power, std_train_symbols)
             recv_symbol_powers = map(self.symbol_power, recv_train_symbols)
@@ -424,16 +424,16 @@ class DeModulator:
     def QAM_DownConverter(self, qam_signal: np.ndarray, debug=True) -> list[list]:
         """
         QAM downconverter: demodulate RF signal to baseband symbols
-        
+
         Processing steps:
         1. Quadrature demodulation
         2. Low-pass filtering
         3. Symbol sampling
-        
+
         Args:
             qam_signal: Received QAM signal
             debug: Whether to plot debug waveforms
-            
+
         Returns:
             Demodulated symbol list
         """
@@ -441,11 +441,11 @@ class DeModulator:
         n = np.arange(lens)
         time = n / self.fs
         time_us = time * 1e6
-        
+
         # Generate local carrier
         carrier_cos = np.cos(2 * np.pi * self.fc * n / self.fs)
         carrier_sin = np.sin(2 * np.pi * self.fc * n / self.fs)
-        
+
         # Quadrature demodulation
         I_prime = qam_signal * carrier_cos
         Q_prime = qam_signal * carrier_sin
@@ -454,7 +454,7 @@ class DeModulator:
         order = 6
         f_cutoff = 2 * self.rs  # Cutoff frequency is 2x symbol rate
         Wn = f_cutoff / (self.fs / 2)  # Normalized frequency
-        b, a = signal.butter(order, Wn, 'low', analog=False)
+        b, a = signal.butter(order, Wn, "low", analog=False)
 
         # Filter and recover baseband (multiply by 2 to compensate mixing loss)
         I_baseband: list[float] = list(signal.filtfilt(b, a, I_prime) * 2)
@@ -492,10 +492,10 @@ class DeModulator:
     def demodulate(self, signal: np.ndarray) -> bytes:
         """
         Demodulation entry function
-        
+
         Args:
             signal: Received RF signal
-            
+
         Returns:
             Demodulated byte data
         """
@@ -509,15 +509,16 @@ class DeModulator:
 def test():
     """
     Test function: verify modulation and demodulation functionality
-    
+
     Now supports both synchronous and asynchronous simulation modes
     """
     import sys
-    sys.path.append('..')  # 添加父目录到路径
-    
+
+    sys.path.append("..")  # 添加父目录到路径
+
     from core.simulator import PhySimulationEngine, SimulationEntity
     from phy.entity import TxEntity, ChannelEntity, RxEntity
-    
+
     # 创建调制解调器
     modulator = Modulator(
         scheme="16QAM", symbol_rate=1e6, sample_rate=50e6, fc=2e6, power_factor=100
@@ -525,7 +526,7 @@ def test():
     demodulator = DeModulator(
         scheme="16QAM", symbol_rate=1e6, sample_rate=50e6, fc=2e6, power_factor=100
     )
-    
+
     # 创建信道
     cable = Cable(
         length=100,
@@ -534,30 +535,32 @@ def test():
         debug_mode=False,
     )
     print(f"\n{cable}")
-    
+
     # 测试数据
     test_str = b"aloha! I like luguan"
     test_sample_num = 1000  # 减少数量以便观察异步行为
-    
+
     # 计算传播延迟（ticks）
     propagation_delay_s = cable.get_propagation_delay()
     time_step_us = 1.0
     propagation_delay_ticks = int(propagation_delay_s / (time_step_us * 1e-6))
-    
-    print(f"Propagation delay: {propagation_delay_s*1e6:.2f} μs = {propagation_delay_ticks} ticks")
-    
+
+    print(
+        f"Propagation delay: {propagation_delay_s * 1e6:.2f} μs = {propagation_delay_ticks} ticks"
+    )
+
     # 创建实体
     tx = TxEntity(modulator, name="Tx-Node")
     channel = ChannelEntity(cable, propagation_delay_ticks, name="Cable-Channel")
     rx = RxEntity(demodulator, name="Rx-Node")
-    
+
     # 预先将数据加入发送队列
     for i in range(test_sample_num):
         tx.enqueue_data(test_str)
-    
+
     # 创建仿真引擎
     engine = PhySimulationEngine(time_step_us=time_step_us, realtime_mode=False)
-    
+
     engine.register_entity(tx)
     engine.register_entity(channel)
     engine.register_entity(rx)
@@ -568,19 +571,20 @@ def test():
     # 运行仿真
     # 需要足够的ticks以完成所有传输
     duration_ticks = test_sample_num + propagation_delay_ticks + 100
-    
+
     import time
+
     start_time = time.time()
-    engine.run(duration_ticks=duration_ticks*10)
+    engine.run(duration_ticks=duration_ticks * 10)
     cost = time.time() - start_time
-    
+
     # 打印统计
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("Simulation Statistics:")
     print(f"Tx: {tx.get_stats()}")
     print(f"Channel: {channel.get_stats()}")
     print(f"Rx: {rx.get_stats()}")
-    
+
     # 验证数据
     success_count = 0
     while rx.rx_buffer:
@@ -588,10 +592,10 @@ def test():
         print(f"rx: {recv_data} tx: {test_str}")
         if recv_data == test_str:
             success_count += 1
-    
+
     print(f"\nData verification: {success_count}/{test_sample_num} packets correct")
-    print(f"Throughput: {test_sample_num*len(test_str) / 1000 / cost:.2f} KBps")
-    print("="*60)
+    print(f"Throughput: {test_sample_num * len(test_str) / 1000 / cost:.2f} KBps")
+    print("=" * 60)
 
 
 if __name__ == "__main__":

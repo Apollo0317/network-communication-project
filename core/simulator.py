@@ -80,6 +80,7 @@ class PhySimulationEngine:
         print(f"Starting simulation for {duration_ticks} ticks")
         print(f"Time step: {self.time_step_us} μs/tick")
         print(f"Total simulated time: {duration_ticks * self.time_step_us / 1e6:.6f} s")
+        print(f"entity num: {len(self.entities)}\nentities: {[entity.name for entity in self.entities]}")
         print(f"{'='*60}\n")
         
         for tick in range(duration_ticks):
