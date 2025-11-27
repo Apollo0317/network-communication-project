@@ -1,11 +1,12 @@
 import struct
 from core import SimulationEntity, PhySimulationEngine, ProtocolLayer
 from typing import Optional, Dict, Tuple, OrderedDict
+from mac import MacLayer
 
-# 协议头格式: Type(1B) | Seq(4B) | Ack(4B) | RWND(2B) (Optional, only for ACK in SR)
+# 协议头格式: Type(1B) | Src_Port(2B) | Dst_Port(2B) |Seq(2B) | Ack(2B) | RWND(2B) (Optional, only for ACK in SR)
 # Type: 0=DATA, 1=ACK
-HEADER_FMT = "!BII"
-HEAD_FMT_ACK = "!BIIH"
+HEADER_FMT = "!BHHHH"
+HEAD_FMT_ACK = "!BHHHHH"
 HEADER_SIZE = struct.calcsize(HEADER_FMT)
 ACK_HEADER_SIZE = struct.calcsize(HEAD_FMT_ACK)
 TYPE_DATA = 0
@@ -20,8 +21,11 @@ MSS = 16  # Maximum Segment Size: 每个包的最大负载长度
 class TransportSession:
     """维护针对特定目标MAC的传输状态"""
 
-    def __init__(self, remote_mac):
+    def __init__(self, local_mac:int, local_port:int, remote_mac:int, remote_port:int):
+        self.local_mac= local_mac
+        self.local_port= local_port
         self.remote_mac = remote_mac
+        self.remote_port= remote_port
         self.seq_out = 0  # 下一个发送的序列号
         self.seq_in = 0  # 期望接收的序列号
         # 已发送但未确认的数据包: seq -> (tick_sent, packet_bytes)
@@ -31,35 +35,37 @@ class TransportSession:
         self.tx_window_size = WINDOW_SIZE
         self.rx_window_size = WINDOW_SIZE
 
+    def __str__(self):
+        return f'[session:({self.local_mac}:{self.local_port}) -> ({self.remote_mac}:{self.remote_port})]'
+
 
 class TransportLayer_GBN(ProtocolLayer):
     def __init__(
         self,
-        lower_layer: ProtocolLayer = None,
+        lower_layer: MacLayer,
         simulator: PhySimulationEngine = PhySimulationEngine(),
         name: str = "transport_layer",
     ):
         super().__init__(lower_layer=lower_layer, simulator=simulator, name=name)
         # 核心：使用 MAC 地址映射会话状态
-        self.sessions: Dict[str, TransportSession] = {}
+        self.sessions: Dict[tuple[int,int,int,int], TransportSession] = {}
+        self.session2data: Dict[TransportSession, bytes] = {}
 
-    def _get_session(self, mac_addr) -> TransportSession:
-        if mac_addr not in self.sessions:
-            self.sessions[mac_addr] = TransportSession(mac_addr)
-        return self.sessions[mac_addr]
+    def _get_session(self, local_mac:int, local_port:int, remote_mac:int, remote_port:int) -> TransportSession:
+        if (local_mac,local_port,remote_mac,remote_port) not in self.sessions.keys():
+            self.sessions[(local_mac,local_port,remote_mac,remote_port)] = TransportSession(local_mac,local_port,remote_mac,remote_port)
+        return self.sessions[(local_mac,local_port,remote_mac,remote_port)]
 
-    def Encapsulate(self, data: tuple) -> Optional[tuple]:
+    def Encapsulate(self, session:TransportSession, data:bytes) -> Optional[tuple]:
         """
         封装逻辑：添加 Seq/Ack 头，并缓存用于重传
         Args:
-            data: (dst_mac, payload_bytes)
+            data: (src_mac, src_port, dst_mac, dst_port, payload_bytes)
         """
-        dst_mac, payload = data
-        session = self._get_session(dst_mac)
 
         # 2. Sequence Numbers: 构建头部 Type=DATA, Seq=Current, Ack=Expected
-        header = struct.pack(HEADER_FMT, TYPE_DATA, session.seq_out, session.seq_in)
-        packet = header + payload
+        header = struct.pack(HEADER_FMT, TYPE_DATA, session.local_port, session.remote_port, session.seq_out, session.seq_in)
+        packet = header + data
 
         # 3. Timeout Retransmission: 记录包和发送时间
         session.unacked_packets[session.seq_out] = (self.simulator.current_tick, packet)
@@ -67,13 +73,13 @@ class TransportLayer_GBN(ProtocolLayer):
         session.seq_out += 1
 
         # 返回给下层的数据保持 (dst_mac, packet) 格式
-        return (dst_mac, packet)
+        return (session.remote_mac, packet)
 
-    def Dencapsulate(self, data: bytes | tuple) -> Optional[bytes]:
+    def Dencapsulate(self, data:tuple) -> Optional[tuple[bytes,int]]:
         """
         解封装逻辑：处理 ACK，校验 Seq
         Args:
-            data: (src_mac, dst_mac, frame_bytes) 来自 MAC 层
+            data: (src_mac, dst_mac, frame) 来自 MAC 层
         """
         if not isinstance(data, tuple) or len(data) != 3:
             return None
@@ -83,10 +89,11 @@ class TransportLayer_GBN(ProtocolLayer):
             return None
 
         # 解析头部
-        msg_type, seq, ack = struct.unpack(HEADER_FMT, frame[:HEADER_SIZE])
+        msg_type, src_port, dst_port, seq, ack = struct.unpack(HEADER_FMT, frame[:HEADER_SIZE])
         payload: bytes = frame[HEADER_SIZE:]
 
-        session = self._get_session(src_mac)
+        session = self._get_session(local_mac=dst_mac,local_port=dst_port,remote_mac=src_mac,remote_port=src_port)
+
 
         # 1. Reliable Transport (ACK处理)
         # 对方发来的 Ack 确认了 Ack 之前的所有包
@@ -105,45 +112,49 @@ class TransportLayer_GBN(ProtocolLayer):
             if seq == session.seq_in:
                 # 顺序正确
                 session.seq_in += 1
-                self._send_ack(src_mac, session.seq_in)
-                return payload
+                self._send_ack(session)
+                
+                if session not in self.session2data.keys():
+                    self.session2data[session] = payload
+                else:
+                    self.session2data[session] += payload
+                return None
+
             elif seq < session.seq_in:
                 # 重复包，重发 ACK
-                self._send_ack(src_mac, session.seq_in)
+                self._send_ack(session)
                 return None
             else:
                 # 乱序包，简单丢弃并重发期望的 ACK (Go-Back-N 风格)
                 # print(f"[{self.name}] Out of order from {src_mac}. Exp {session.seq_in}, Got {seq}")
-                self._send_ack(src_mac, session.seq_in)
+                self._send_ack(session)
                 return None
 
-    def _send_ack(self, dst_mac, ack_num):
+    def _send_ack(self, session:TransportSession):
         """发送纯 ACK 包"""
-        header = struct.pack(HEADER_FMT, TYPE_ACK, 0, ack_num)
+        header = struct.pack(HEADER_FMT, TYPE_ACK, session.local_port, session.remote_port, 0, session.seq_in)
         if self.lower_layer:
-            self.lower_layer.send((dst_mac, header))
+            self.lower_layer.send((session.remote_mac, header))
 
     def handle_data_recieved(self, data):
-        payload = self.Dencapsulate(data)
-        if payload:
-            if self.upper_layer:
-                self.upper_layer.handle_data_recieved(payload)
-            else:
-                self.rx_queue.append(payload)
+        self.Dencapsulate(data)
 
-    def send(self, data: tuple):
+    def send(self, data: tuple[int,int,int,bytes])->TransportSession:
         """
         Args:
-            data: (dst_mac:str, payload:bytes)
+            data: (src_port:int, dst_mac:int, dst_port:int, payload:bytes)
         """
-        dst_mac, payload = data
-        session = self._get_session(dst_mac)
+        src_port, dst_mac, dst_port, payload = data
+        src_mac= self.lower_layer.mac_addr
+        session = self._get_session(src_mac,src_port,dst_mac,dst_port)
 
         # [修改] 1. 将数据写入发送缓冲区，而不是直接发送
         session.send_buffer += payload
 
         # [修改] 2. 尝试刷新缓冲区（分片发送）
         self._flush_send_buffer(session)
+
+        return session
 
     def _flush_send_buffer(self, session: TransportSession):
         """
@@ -160,7 +171,7 @@ class TransportLayer_GBN(ProtocolLayer):
 
             # 2. 封装并发送
             # 注意：Encapsulate 内部会处理 seq_out++ 和 unacked_packets 的记录
-            encapsulated = self.Encapsulate((session.remote_mac, chunk))
+            encapsulated = self.Encapsulate(session=session, data=chunk)
             if encapsulated and self.lower_layer:
                 self.lower_layer.send(encapsulated)
 
@@ -170,7 +181,7 @@ class TransportLayer_GBN(ProtocolLayer):
         """
         super().update(tick)
 
-        for mac, sessions in self.sessions.items():
+        for session_keys, sessions in self.sessions.items():
             """
             遍历会话检查base_seq是否超时
             """
@@ -180,9 +191,9 @@ class TransportLayer_GBN(ProtocolLayer):
             if tick - base_tick > TIMEOUT_TICKS:
                 # 重传窗口内所有未确认包
                 for seq, (sent_tick, packet) in sessions.unacked_packets.items():
-                    print(f"[{self.name}] Timeout retransmitting seq {seq} to {mac}")
+                    print(f"[{self.name}] Timeout retransmitting seq {seq} to {sessions.remote_mac}:{sessions.remote_port}")
                     if self.lower_layer:
-                        self.lower_layer.send((mac, packet))
+                        self.lower_layer.send((sessions.remote_mac, packet))
                     # 更新发送时间，避免立即再次重传
                     sessions.unacked_packets[seq] = (tick, packet)
                 break  # 只处理一个会话的超时，避免一次更新内多次重传

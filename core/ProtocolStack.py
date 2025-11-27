@@ -4,12 +4,12 @@ from collections import deque
 from core.simulator import SimulationEntity, PhySimulationEngine
 
 class ProtocolLayer(SimulationEntity):
-    def __init__(self, lower_layer: Optional[Self], simulator:PhySimulationEngine, name:str='zero'):
+    def __init__(self, lower_layer, simulator:PhySimulationEngine, name:str='zero'):
         super().__init__(name=name)
         self.tx_queue= deque()
         self.rx_queue= deque()
         self.lower_layer:Self= lower_layer
-        self.upper_layer: Optional[Self]= None
+        self.upper_layer:Optional[Self]= None
         if self.lower_layer:
             self.lower_layer.upper_layer= self
         self.simulator= simulator
