@@ -32,7 +32,7 @@ class ChannelEntity(SimulationEntity):
     def connect_receiver(self, rx: "RxEntity"):
         """连接一个接收端"""
         self.receivers.append(rx)
-        print(f"[{self.name}] Connected to receiver: {rx.name}")
+        #print(f"[{self.name}] Connected to receiver: {rx.name}")
 
     def accept_signal(self, signal: np.ndarray, current_tick: int):
         """供 Tx 调用：接收信号进入信道"""
@@ -80,7 +80,7 @@ class TxEntity(SimulationEntity):
     def connect_to_channel(self, channel: ChannelEntity):
         """物理连接：插上网线"""
         self.connected_channel = channel
-        print(f"[{self.name}] Connected to channel: {channel.name}")
+        #print(f"[{self.name}] Connected to channel: {channel.name}")
 
     def enqueue_data(self, data: bytes):
         self.tx_buffer.append(data)
@@ -150,7 +150,7 @@ class RxEntity(SimulationEntity):
 
 
 class TwistedPair:
-    def __init__(self, cable: Cable, simulator: PhySimulationEngine):
+    def __init__(self, cable: Cable, simulator: PhySimulationEngine, ID:int=0):
         channel_a = ChannelEntity(cable=cable, name="channel_a")
         channel_b = ChannelEntity(cable=cable, name="channel_b")
         simulator.register_entity(entity=channel_a)
@@ -158,6 +158,10 @@ class TwistedPair:
         self.channel_a = channel_a
         self.channel_b = channel_b
         self.connected_count = 0  # 使用计数器替代布尔值，更清晰
+        self.ID= ID
+
+    def __str__(self):
+        return f"TwistedPair_{self.ID}(Channel A, Channel B)"
 
     def connect(self, tx_interface: TxEntity, rx_interface: RxEntity):
         """

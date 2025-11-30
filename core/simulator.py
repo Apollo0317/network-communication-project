@@ -64,7 +64,7 @@ class PhySimulationEngine:
     def register_entity(self, entity: SimulationEntity):
         """注册一个实体到仿真引擎"""
         self.entities.append(entity)
-        print(f"Registered entity: {entity.name}")
+        #print(f"Registered entity: {entity.name}")
     
     def run(self, duration_ticks: int):
         """
@@ -80,7 +80,7 @@ class PhySimulationEngine:
         print(f"Starting simulation for {duration_ticks} ticks")
         print(f"Time step: {self.time_step_us} μs/tick")
         print(f"Total simulated time: {duration_ticks * self.time_step_us / 1e6:.6f} s")
-        print(f"entity num: {len(self.entities)}\nentities: {[entity.name for entity in self.entities]}")
+        print(f"entity num: {len(self.entities)}\n")
         print(f"{'='*60}\n")
         
         for tick in range(duration_ticks):
@@ -98,9 +98,9 @@ class PhySimulationEngine:
                 time.sleep(self.time_step_s)
             
             # 定期打印进度
-            if (tick + 1) % 1000 == 0:
-                progress = (tick + 1) / duration_ticks * 100
-                print(f"Progress: {progress:.1f}% (tick {tick+1}/{duration_ticks})")
+            # if (tick + 1) % 1000 == 0:
+            #     progress = (tick + 1) / duration_ticks * 100
+            #     print(f"Progress: {progress:.1f}% (tick {tick+1}/{duration_ticks})")
         
         # 计算统计信息
         end_wallclock = time.time()
@@ -117,6 +117,8 @@ class PhySimulationEngine:
         print(f"Wallclock time: {wallclock_time:.6f} s")
         print(f"Simulation speed: {self.stats['simulation_speed']:.2f}x realtime")
         print(f"{'='*60}\n")
+
+        self.reset()
         
         self.running = False
     

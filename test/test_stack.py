@@ -19,6 +19,7 @@ class TestNode(SimulationEntity):
         self.socket_layer= self.tcp_layer
         self.socket= socket(tcp_layer=self.tcp_layer)
         self.socket.bind(8080)
+        self.socket.setmode('debug')
         self.mac_addr= mac_addr
         self.name= name
         simulator.register_entity(self)
@@ -28,39 +29,11 @@ class TestNode(SimulationEntity):
             tx_interface=self.phy_layer.tx_entity,
             rx_interface=self.phy_layer.rx_entity
         )
+        print(f'[{self.name}] connected to {twisted_pair}')
     
     def update(self, tick):
         super().update(tick)
 
-
-
-    
-
-def test_mac_phy_integration():
-    simulator= PhySimulationEngine(time_step_us=1)
-    node1= TestNode(simulator=simulator, mac_addr=1, name='node1')
-    node2= TestNode(simulator=simulator, mac_addr=2, name='node2')
-    node3= TestNode(simulator=simulator, mac_addr=3, name='node3')
-    switcher= Switcher(simulator=simulator, mac_addr=0, port_num=3, name='switcher')
-
-    # 创建信道
-    cable = Cable(
-        length=100,
-        attenuation=3,
-        noise_level=4,
-        debug_mode=False,
-    )
-    print(f"\n{cable}")
-    tp1= TwistedPair(cable=cable, simulator=simulator)
-    tp2= TwistedPair(cable=cable, simulator=simulator)
-    tp3= TwistedPair(cable=cable, simulator=simulator)
-
-    node1.connect_to(tp1)
-    switcher.connect_to(port=0, twisted_pair=tp1)
-    node2.connect_to(tp2)
-    switcher.connect_to(port=1, twisted_pair=tp2)
-    node3.connect_to(tp3)
-    switcher.connect_to(port=2, twisted_pair=tp3)
 
 def test_two_client_sockets_to_one_server():
     simulator = PhySimulationEngine(time_step_us=1)
@@ -79,9 +52,9 @@ def test_two_client_sockets_to_one_server():
         debug_mode=False,
     )
     print(f"\n{cable}")
-    tp1 = TwistedPair(cable=cable, simulator=simulator)
-    tp2 = TwistedPair(cable=cable, simulator=simulator)
-    tp3 = TwistedPair(cable=cable, simulator=simulator)
+    tp1 = TwistedPair(cable=cable, simulator=simulator, ID=0)
+    tp2 = TwistedPair(cable=cable, simulator=simulator, ID=1)
+    tp3 = TwistedPair(cable=cable, simulator=simulator, ID=2)
 
     node1.connect_to(tp1)
     switcher.connect_to(port=0, twisted_pair=tp1)
@@ -98,8 +71,10 @@ def test_two_client_sockets_to_one_server():
     # node1: 两个客户端 socket，端口不同，分别连到 node2:8080
     client_sock1 = socket(tcp_layer=node1.tcp_layer)
     client_sock1.bind(10000)
+    client_sock1.setmode('debug')
     client_sock2 = socket(tcp_layer=node1.tcp_layer)
     client_sock2.bind(10001)
+    client_sock2.setmode('debug')
     # --- 两个客户端依次发起连接并发送不同的数据 ---
     msg1 = b'hello from client 1'
     msg2 = b'hello from client 2'
