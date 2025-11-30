@@ -22,7 +22,7 @@ class ProtocolLayer(SimulationEntity):
         """
         dencapsulated_data= self.Dencapsulate(data=data)
         if dencapsulated_data is None:
-            print(f"[{self.name} Layer] Dencapsulation returned None, dropping packet.")
+            #print(f"[{self.name} Layer] Dencapsulation returned None, dropping packet.")
             return
         if self.upper_layer:
             self.upper_layer.handle_data_recieved(data=dencapsulated_data)
