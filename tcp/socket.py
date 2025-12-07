@@ -73,7 +73,7 @@ class socket:
                 new_socket = socket(tcp_layer=self.tcp_layer)
                 new_socket.bind(self.locol_port)
                 new_socket.session = session
-                # 继承 debug 模式，方便继续打时间线
+
                 new_socket.debug_mode = self.debug_mode
 
                 self._timeline_log(
@@ -94,7 +94,6 @@ class socket:
         dst_port = self.session.remote_port
         self.tcp_layer.send((self.locol_port, dst_mac, dst_port, data))
 
-        # 只展示前 16B 预览，避免刷屏
         preview = data[:16]
         self._timeline_log(
             "SEND",

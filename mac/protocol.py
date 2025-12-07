@@ -6,7 +6,8 @@ frame format:\n
 """
 
 import struct
-import zlib
+# import zlib
+from mac.crc import crc32_with_table
 
 HEADER = b"\xaa\xbb"
 
@@ -25,7 +26,7 @@ class NetworkInterface:
         header = struct.pack("!2sHBB", self.header, lens, src_mac, dst_mac)
         # header = struct.pack("!2sHBB", b'\xaa\xbb', 6, '1', '2')
         raw_frame = header + data
-        crc = zlib.crc32(raw_frame)
+        crc = crc32_with_table(raw_frame)
         frame = raw_frame + struct.pack("!I", crc)
         return frame
 
@@ -38,7 +39,7 @@ class NetworkInterface:
         if frame[:2] != self.header:
             return None
         recieved_crc: int = struct.unpack("!I", frame[-4:])[0]
-        caculated_crc = zlib.crc32(frame[:-4])
+        caculated_crc = crc32_with_table(frame[:-4])
         if recieved_crc != caculated_crc:
             print(
                 f"[{self.name}] CRC Error: recieved {recieved_crc}, caculated {caculated_crc}"

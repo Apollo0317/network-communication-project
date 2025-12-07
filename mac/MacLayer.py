@@ -37,4 +37,5 @@ class MacLayer(ProtocolLayer):
             # if self.ni.mode == 'node':
             #     return data[-1]
             return data  # (src_mac, dst_mac, payload)
+
         

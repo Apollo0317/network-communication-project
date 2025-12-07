@@ -11,12 +11,12 @@ def test_http_communication():
     """测试 HTTP 客户端和服务器通信"""
     simulator = PhySimulationEngine(time_step_us=1)
 
-    server = HttpServer(simulator=simulator, mac_addr=1, name='server', port=80)
+    server = HttpServer(simulator=simulator, mac_addr=3, name='server', port=80)
     client = HttpClient(simulator=simulator, mac_addr=2, name='client')
     
     switcher = Switcher(simulator=simulator, mac_addr=0, port_num=2, name='switcher')
 
-    cable = Cable(length=100, attenuation=3, noise_level=4, debug_mode=False)
+    cable = Cable(length=100, attenuation=3, noise_level=3, debug_mode=False)
     tp1 = TwistedPair(cable=cable, simulator=simulator, ID=0)
     tp2 = TwistedPair(cable=cable, simulator=simulator, ID=1)
 
@@ -32,12 +32,12 @@ def test_http_communication():
     def on_response(resp):
         responses.append(resp)
         if resp:
-            print(f"Callback: status={resp['status_code']}, body={resp['body'][:100]}")
+            print(f"Callback with {len(resp['raw'])} byte: status={resp['status_code']}, body={resp['body'][:100]}")
 
-    req1 = client.get(dst_mac=1, dst_port=80, path='/', callback=on_response)
-    req2 = client.get(dst_mac=1, dst_port=80, path='/hello', callback=on_response)
-    req3 = client.get(dst_mac=1, dst_port=80, path='/api/data', callback=on_response)
-    req4 = client.get(dst_mac=1, dst_port=80, path='/not_exist', callback=on_response)
+    req1 = client.get(dst_mac=3, dst_port=80, path='/', callback=on_response)
+    req2 = client.get(dst_mac=3, dst_port=80, path='/hello', callback=on_response)
+    req3 = client.get(dst_mac=3, dst_port=80, path='/api/data', callback=on_response)
+    req4 = client.get(dst_mac=3, dst_port=80, path='/not_exist_?', callback=on_response)
 
     simulator.run(duration_ticks=10000)
 
@@ -46,7 +46,7 @@ def test_http_communication():
         if resp:
             print(f"Response {i+1}: {resp['raw']}")
 
-    assert len(responses) == 4, "Should receive 4 responses"
+    assert len(responses) == 4, f"Should receive 4 responses but got {len(responses)}"
     
     print("\n=== HTTP Test Passed ===")
 
@@ -98,5 +98,5 @@ def test_http_post():
 
 
 if __name__ == "__main__":
-    #test_http_communication()
-    test_http_post()
+    test_http_communication()
+    #test_http_post()

@@ -17,7 +17,8 @@ class Switcher(SimulationEntity):
         self.port_num = port_num
         self.socket_list:list[ProtocolLayer] = []
         self.port_list: list[PhyLayer] = []
-        self.map: dict[int, int] = {1: 0, 2: 1, 3: 2}
+        # self.map: dict[int, int] = {1: 0, 2: 1, 3: 2}
+        self.map: dict[int, int] = {}
         for i in range(port_num):
             phy_layer = PhyLayer(lower_layer=None, coding=True, simulator=simulator, name=name)
             mac_layer = MacLayer(
@@ -47,10 +48,21 @@ class Switcher(SimulationEntity):
                 result = socket_layer.recv()
                 if result:
                     src_mac, dst_mac, data = result
+                    if src_mac not in self.map:
+                        # passive learning
+                        self.map[src_mac] = i
+                        print(f"Switcher learned MAC {src_mac} is at port {i}")
+                        if len(self.map) == self.port_num:
+                            print(f"Switcher MAC table full: {self.map}")
                     dst_port = self.map.get(dst_mac)
                     if dst_port is not None:
                         dst_port_socket_layer = self.socket_list[dst_port]
                         dst_port_socket_layer.send((src_mac,dst_mac, data))
                     else:
-                        # TODO: imply flood algo
+                        # flood sending
+                        for j in range(self.port_num):
+                            if j != i:
+                                flood_socket_layer = self.socket_list[j]
+                                flood_socket_layer.send((src_mac,dst_mac, data))
+
                         pass

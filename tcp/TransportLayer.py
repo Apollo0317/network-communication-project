@@ -53,7 +53,7 @@ class TransportLayer_GBN(ProtocolLayer):
         self.sessions: Dict[tuple[int, int, int, int], TransportSession] = {}
         self.session2data: Dict[TransportSession, bytes] = {}
         # debug 开关
-        self.debug_mode: bool = False
+        self.debug_mode: bool = True
 
     # 简单的调试打印工具
     def debug_log(self, msg: str):
