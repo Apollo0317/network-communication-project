@@ -3,10 +3,12 @@ Unit tests for Modulator and DeModulator classes
 Tests basic functionality and calculates BER/SER under different channel conditions
 """
 
+import sys
+sys.path.append("..")  # 添加父目录到路径
 import unittest
 import numpy as np
 import matplotlib.pyplot as plt
-from modulator import Modulator, DeModulator
+from phy.modulator import Modulator, DeModulator
 from cable import Cable
 import os
 from typing import Tuple, List
@@ -194,7 +196,7 @@ class TestErrorRateAnalysis(unittest.TestCase):
 
     def test_noise_levels(self):
         """Test different noise levels"""
-        noise_levels = [0.0, 0.1, 0.3, 0.5, 1.0, 2.0]
+        noise_levels = [0.0, 0.1, 0.3, 0.5, 1.0, 2.0]*5
         results = []
 
         print("\n" + "=" * 70)
@@ -225,7 +227,7 @@ class TestErrorRateAnalysis(unittest.TestCase):
 
     def test_attenuation_levels(self):
         """Test different attenuation levels"""
-        attenuation_levels = [0.0, 0.1, 0.25, 0.5, 1.0, 2.0]
+        attenuation_levels = [0.0, 0.1, 0.25, 0.5, 1.0, 2.0]*3
         results = []
 
         print("\n" + "=" * 70)
@@ -366,7 +368,7 @@ class TestErrorRatePlots(unittest.TestCase):
 
     def test_generate_snr_vs_ber_plot(self):
         """Generate SNR vs BER/SER plot"""
-        snr_db_range = np.arange(0, 30, 2)
+        snr_db_range = np.arange(-10 , 10, 2)
         ber_list = []
         ser_list = []
 
@@ -413,7 +415,7 @@ class TestErrorRatePlots(unittest.TestCase):
     def test_generate_comparison_plot(self):
         """Generate comprehensive comparison plot"""
         # Test different parameters
-        noise_levels = [0.0, 0.1, 0.3, 0.5, 1.0]
+        noise_levels = [1, 2, 3, 4, 5]
         noise_results = []
 
         for noise in noise_levels:

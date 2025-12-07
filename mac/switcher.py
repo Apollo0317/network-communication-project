@@ -12,6 +12,7 @@ class Switcher(SimulationEntity):
         mac_addr: int,
         port_num: int = 3,
         name="switcher",
+        debug_mode: bool = True,
     ):
         super().__init__(name=name)
         self.port_num = port_num
@@ -31,8 +32,11 @@ class Switcher(SimulationEntity):
             self.socket_list.append(mac_layer)
             self.port_list.append(phy_layer)
         simulator.register_entity(self)
+        self.debug_mode = debug_mode
 
-
+    def debug_log(self, msg):
+        if self.debug_mode:
+            print(f"[TICK {self.current_tick}][{self.name}][MAC] {msg}")
 
     def connect_to(self, port: int, twisted_pair: TwistedPair):
         phy_layer = self.port_list[port]
@@ -42,6 +46,7 @@ class Switcher(SimulationEntity):
         pass
 
     def update(self, tick: int):
+        super().update(tick)
         if tick % 10 == 0:
             for i in range(self.port_num):
                 socket_layer = self.socket_list[i]
@@ -51,9 +56,9 @@ class Switcher(SimulationEntity):
                     if src_mac not in self.map:
                         # passive learning
                         self.map[src_mac] = i
-                        print(f"Switcher learned MAC {src_mac} is at port {i}")
+                        self.debug_log(f"Switcher learned MAC {src_mac} is at port {i}")
                         if len(self.map) == self.port_num:
-                            print(f"Switcher MAC table full: {self.map}")
+                            self.debug_log(f"Switcher MAC table full: {self.map}")
                     dst_port = self.map.get(dst_mac)
                     if dst_port is not None:
                         dst_port_socket_layer = self.socket_list[dst_port]

@@ -7,12 +7,13 @@ from typing import Optional, List
 import numpy as np
 from core import SimulationEntity, PhySimulationEngine
 from phy.cable import Cable
+from phy.modulator import Modulator, DeModulator
 
 
 class ChannelEntity(SimulationEntity):
-    """信道实体：连接 Tx 和 Rx 的媒介"""
+    """Transmission media, connects TxEntity and RxEntity"""
 
-    def __init__(self, cable, name: str = "Channel"):
+    def __init__(self, cable:Cable, name: str = "Channel"):
         super().__init__(name)
         self.cable = cable
 
@@ -21,21 +22,19 @@ class ChannelEntity(SimulationEntity):
         propagation_delay_ticks = int(propagation_delay_s / (time_step_us * 1e-6))
         self.propagation_delay_ticks = propagation_delay_ticks
 
-        # 目标接收者列表 (支持广播)
         self.receivers: List["RxEntity"] = []
 
-        # 传输中的信号队列: (signal, arrival_tick)
+        # signal queue: (signal, arrival_tick)
         self.transit_queue: deque = deque()
 
         self.stats = {"signals_in_transit": 0, "signals_delivered": 0}
 
     def connect_receiver(self, rx: "RxEntity"):
-        """连接一个接收端"""
         self.receivers.append(rx)
-        #print(f"[{self.name}] Connected to receiver: {rx.name}")
 
     def accept_signal(self, signal: np.ndarray, current_tick: int):
         """供 Tx 调用：接收信号进入信道"""
+
         # 计算信号到达接收端的时间（传播延迟）
         arrival_tick = current_tick + self.propagation_delay_ticks
         self.transit_queue.append((signal, arrival_tick))
@@ -63,24 +62,21 @@ class ChannelEntity(SimulationEntity):
 
 
 class TxEntity(SimulationEntity):
-    """发送器实体"""
+    """Transmitter entity"""
 
-    def __init__(self, modulator, name: str = "Transmitter"):
+    def __init__(self, modulator:Modulator, name: str = "Transmitter"):
         super().__init__(name)
         self.modulator = modulator
         self.tx_buffer = deque()
         self.connected_channel: Optional[ChannelEntity] = None
 
-        # 传输状态控制
         self.is_transmitting = False
         self.transmission_end_tick = 0
 
         self.stats = {"bytes_sent": 0, "packets_sent": 0}
 
     def connect_to_channel(self, channel: ChannelEntity):
-        """物理连接：插上网线"""
         self.connected_channel = channel
-        #print(f"[{self.name}] Connected to channel: {channel.name}")
 
     def enqueue_data(self, data: bytes):
         self.tx_buffer.append(data)
@@ -124,9 +120,9 @@ class TxEntity(SimulationEntity):
 
 
 class RxEntity(SimulationEntity):
-    """接收器实体"""
+    """Receiver entity"""
 
-    def __init__(self, demodulator, name: str = "Receiver"):
+    def __init__(self, demodulator:DeModulator, name: str = "Receiver"):
         super().__init__(name)
         self.demodulator = demodulator
         self.rx_buffer = deque()  # 存放解调后的字节流
@@ -150,6 +146,12 @@ class RxEntity(SimulationEntity):
 
 
 class TwistedPair:
+    """
+    encapsulates a twisted pair cable with two channels: A and B
+
+    allows two devices to connect with automatic crossover handling
+    """
+
     def __init__(self, cable: Cable, simulator: PhySimulationEngine, ID:int=0):
         channel_a = ChannelEntity(cable=cable, name="channel_a")
         channel_b = ChannelEntity(cable=cable, name="channel_b")
@@ -157,7 +159,7 @@ class TwistedPair:
         simulator.register_entity(entity=channel_b)
         self.channel_a = channel_a
         self.channel_b = channel_b
-        self.connected_count = 0  # 使用计数器替代布尔值，更清晰
+        self.connected_count = 0
         self.ID= ID
 
     def __str__(self):

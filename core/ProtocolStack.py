@@ -4,7 +4,7 @@ from collections import deque
 from core.simulator import SimulationEntity, PhySimulationEngine
 
 class ProtocolLayer(SimulationEntity):
-    def __init__(self, lower_layer, simulator:PhySimulationEngine, name:str='zero'):
+    def __init__(self, lower_layer, simulator:PhySimulationEngine, name:str='zero', debug_mode:bool=False):
         super().__init__(name=name)
         self.tx_queue= deque()
         self.rx_queue= deque()
@@ -14,7 +14,12 @@ class ProtocolLayer(SimulationEntity):
             self.lower_layer.upper_layer= self
         self.simulator= simulator
         simulator.register_entity(self)
+        self.debug_mode= debug_mode
         pass
+
+    def debug_log(self, msg: str):
+        if self.debug_mode:
+            print(f"[TICK {self.simulator.current_tick}][{self.name}] {msg}")
         
     def handle_data_recieved(self, data):
         """

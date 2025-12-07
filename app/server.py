@@ -139,17 +139,14 @@ class HttpServer(SimulationEntity):
         print(f'[{self.name}] send Response: {response[:50]}...')
 
     def update(self, tick):
-        """非阻塞式更新循环"""
         super().update(tick)
         
-        # 1. 尝试 accept 新连接
         new_conn = self.listen_socket.accept()
         if new_conn is not None:
             # new_conn.setmode('debug')
             self.connections.append(new_conn)
             print(f"[{self.name}] New connection accepted at {new_conn.locol_port}")
         
-        # 2. 处理已有连接的数据
         for conn in self.connections[:]:  # 用切片避免迭代时修改
             data = conn.recv(4096)
             if data:

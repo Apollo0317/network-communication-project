@@ -41,9 +41,9 @@ class NetworkInterface:
         recieved_crc: int = struct.unpack("!I", frame[-4:])[0]
         caculated_crc = crc32_with_table(frame[:-4])
         if recieved_crc != caculated_crc:
-            print(
-                f"[{self.name}] CRC Error: recieved {recieved_crc}, caculated {caculated_crc}"
-            )
+            # print(
+            #     f"[{self.name}] CRC Error: recieved {recieved_crc}, caculated {caculated_crc}"
+            # )
             raise ValueError("CRC Mismatch")
 
         _, lens, src_mac, dst_mac = struct.unpack("!2sHBB", frame[:6])

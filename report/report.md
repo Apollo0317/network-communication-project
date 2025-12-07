@@ -9,6 +9,8 @@ documentclass: article
 header-includes:
   - \usepackage{fancyhdr}
   - \pagestyle{fancy}
+  - \usepackage{float}
+  - \floatplacement{figure}{H}
 ---
 
 # 1. Introduction
@@ -532,20 +534,67 @@ class ChannelEncoder:
 | Error detection | 2 bits per 7-bit block |
 
 
-#### Test Results
+### 3.1.3 Test Results
 
-```
-Testing Hamming (7,4) Code:
-==================================================
-Test: Single bit error correction
-Original:  [1, 0, 1, 1]
-Encoded:   [0, 0, 1, 1, 0, 1, 1]
-Corrupted: [0, 0, 1, 1, 0, 0, 1]  (bit 5 flipped)
-Decoded:   [1, 0, 1, 1]
-Result:    PASS (error corrected)
-==================================================
+
+#### Test Modulator (and DeModulator)
+<br>
+test code: 
+
+```python
+def test_modulating():
+    """
+    Test modulation waveform generation
+    """
+    modulator = Modulator(
+        scheme="16QAM", symbol_rate=1e6, sample_rate=50e6, fc=2e6, power_factor=1, debug=True
+    )
+    test_str = b"Hello!"
+    print(f"Original data: {test_str}")
+
+    signal = modulator.modulate(data=test_str)
+
+    demodulator= DeModulator(
+        scheme="16QAM", symbol_rate=1e6, sample_rate=50e6, fc=2e6, power_factor=1, debug=True
+    )
+    recovered_data = demodulator.demodulate(signal=signal)
+    print(f"Recovered data: {recovered_data}")
+
+    assert recovered_data.startswith(test_str), "Data recovery failed!"
 ```
 
+
+![*modulated signal:*](Fig/test_phy_signal.png)
+
+![*demodulated IQ signal:*](Fig/test_phy_IQ.png)
+
+
+#### Test Channel Coding
+
+test code
+```python
+def test_channel_coding():
+    channel_encoder = ChannelEncoder()
+    message = b"Hello, Hamming Code!"
+    print(f"Original Message: {message}")
+
+    encoded_message = channel_encoder.encoding(data=message)
+    print(f"Encoded Message: {encoded_message}")
+
+    # Introduce a single-bit error for testing
+    encoded_bits = channel_encoder.bytes_to_bits(byte_data=encoded_message)
+    # Flip the 10th bit (for example)
+    encoded_bits[10] ^= 1
+    corrupted_encoded_message = channel_encoder.bits_to_bytes(bits=encoded_bits)
+    print(f"Corrupted Encoded Message: {corrupted_encoded_message}")
+
+    decoded_message = channel_encoder.decoding(data=corrupted_encoded_message)
+    print(f"Decoded Message: {decoded_message}")
+
+    assert message == decoded_message, "Decoded message does not match original!"
+```
+
+![*Hamming Coding*](Fig/test_phy_coding.png)
 
 
 ## 3.2 Mac Layer
@@ -808,27 +857,157 @@ def connect_to(self, port: int, twisted_pair: TwistedPair):
     )
 ```
 
-#### Test Results
+### 3.2.3 Test Results
 
 ```
-==================================================
-Switch Learning Test
-==================================================
-[Tick 100] Node1 (MAC=1) sends to Node2 (MAC=2)
-  Switcher learned MAC 1 at port 0
-  Flooding to port 1, 2 (unknown dst)
-
-[Tick 200] Node2 (MAC=2) replies to Node1 (MAC=1)
-  Switcher learned MAC 2 at port 1
-  Forwarding to port 0 (known dst)
-
-[Tick 300] Node1 sends again to Node2
-  Forwarding to port 1 (known dst)
-
-MAC Table: {1: 0, 2: 1}
-==================================================
+TODO
 ```
 
+#### Test CRC32
+
+test code:
+```python
+def test_crc32_table_version():
+    import zlib
+    
+    test_cases = [
+        b"Hello, World!",
+        b"123456789",
+        bytes(range(256)),
+        b"bulabulabula",
+    ]
+    
+    print("=" * 60)
+    print("CRC-32 Table Version Tests")
+    print("=" * 60)
+    
+    all_passed = True
+    for data in test_cases:
+        basic_crc = crc32(data)
+        table_crc = crc32_with_table(data)
+        zlib_crc = zlib.crc32(data) & 0xFFFFFFFF
+        
+        match = (basic_crc == table_crc == zlib_crc)
+        status = "pass" if match else "fail"
+        if not match:
+            all_passed = False
+        
+        print(f"{status}: basic={basic_crc:#010x} table={table_crc:#010x} zlib={zlib_crc:#010x}")
+    
+    assert all_passed, "CRC-32 table version tests fail"
+```
+
+![*crc32 checksum ok*](Fig/test_mac_crc.png)
+
+#### Test MultiNode Communication
+
+test code:
+```python
+def test_three_nodes_communicate_via_switcher():
+    simulator = PhySimulationEngine(time_step_us=1)
+
+    node1 = TestNode(simulator=simulator, mac_addr=1, name='node1')
+    node2 = TestNode(simulator=simulator, mac_addr=2, name='node2')
+    node3 = TestNode(simulator=simulator, mac_addr=3, name='node3')
+    switcher = Switcher(simulator=simulator, mac_addr=0, port_num=3, name='switcher')
+
+    cable = Cable(
+        length=100,
+        attenuation=4,
+        noise_level=3,
+        debug_mode=False,
+    )
+    print(f"\n{cable}")
+    tp1 = TwistedPair(cable=cable, simulator=simulator, ID=0)
+    tp2 = TwistedPair(cable=cable, simulator=simulator, ID=1)
+    tp3 = TwistedPair(cable=cable, simulator=simulator, ID=2)
+
+    node1.connect_to(tp1)
+    switcher.connect_to(port=0, twisted_pair=tp1)
+    node2.connect_to(tp2)
+    switcher.connect_to(port=1, twisted_pair=tp2)
+    node3.connect_to(tp3)
+    switcher.connect_to(port=2, twisted_pair=tp3)
+
+    test_msg1=  b"Hello from Node 1 to Node 2"
+    test_msg2=  b"Hello from Node 3 to Node 2"
+
+    print(f"\n[node1] Sending message to [node2]: {test_msg1}")
+    node1.send(dst_mac=2, data=test_msg1)
+
+    print(f"\n[node3] Sending message to [node2]: {test_msg2}")
+    node3.send(dst_mac=2, data=test_msg2)
+
+    simulator.run(duration_ticks=3000)
+
+    received_msgs_node2= node2.recvall()
+    print(f"\n[node2] Received messages: {received_msgs_node2}")
+
+    assert received_msgs_node2 is not None, "[node2] No messages received"
+    assert len(received_msgs_node2) == 2, f"[node2] Expected 2 messages, got {len(received_msgs_node2)}"
+    assert test_msg1 in received_msgs_node2, "[node2] Message from Node 1 missing"
+    assert test_msg2 in received_msgs_node2, "[node2] Message from Node 3 missing"
+```
+
+![*MultiNode simultaneously communication*](Fig/test_mac_multinode.png)
+
+
+#### Test Forwarding Table Learning
+
+test code:
+```python
+def test_switcher_mac_learning():
+    simulator = PhySimulationEngine(time_step_us=1)
+
+    node1 = TestNode(simulator=simulator, mac_addr=1, name='node1')
+    node2 = TestNode(simulator=simulator, mac_addr=2, name='node2')
+    switcher = Switcher(simulator=simulator, mac_addr=0, port_num=2, name='switcher')
+
+    cable = Cable(
+        length=100,
+        attenuation=4,
+        noise_level=3,
+        debug_mode=False,
+    )
+    print(f"\n{cable}")
+    tp1 = TwistedPair(cable=cable, simulator=simulator, ID=0)
+    tp2 = TwistedPair(cable=cable, simulator=simulator, ID=1)
+
+    node1.connect_to(tp1)
+    switcher.connect_to(port=0, twisted_pair=tp1)
+    node2.connect_to(tp2)
+    switcher.connect_to(port=1, twisted_pair=tp2)
+
+    print(f"\nSwitcher MAC Table: {switcher.map}")
+
+    test_msg1=  b"Message 1 from Node 1 to Node 2"
+    test_msg2=  b"Message 2 from Node 2 to Node 1"
+
+    print(f"\n[node1] Sending message to [node2]: {test_msg1}")
+    node1.send(dst_mac=2, data=test_msg1)
+
+    simulator.run(duration_ticks=2000)
+
+    received_msgs_node2= node2.recvall()
+    print(f"\n[node2] Received messages: {received_msgs_node2}")
+
+    print(f"\n[node2] Sending message to [node1]: {test_msg2}")
+    node2.send(dst_mac=1, data=test_msg2)
+
+    simulator.run(duration_ticks=2000)
+
+    received_msgs_node1= node1.recvall()
+    print(f"\n[node1] Received messages: {received_msgs_node1}")
+
+
+    print(f"\nSwitcher MAC Table: {switcher.map}")
+    assert switcher.map.get(1) == 0, "Switcher did not learn MAC 1 correctly"
+    assert switcher.map.get(2) == 1, "Switcher did not learn MAC 2 correctly"
+
+    print("\n=== Switcher MAC Learning Test Passed ===")
+```
+
+![*switcher learnt the fowarding table*](Fig/test_mac_switcher.png)
 
 ## 3.3 Transport Layer
 
@@ -1349,29 +1528,118 @@ response = client_sock.recv(1024)
 ### 3.3.6 Test Results
 
 ```
-==================================================
-Transport Layer Test (GBN)
-==================================================
-[TICK 0] Client CONNECT to 1:80
-[TICK 0] NEW SESSION 2:12345 -> 1:80
-[TICK 0] SEND DATA seq=0 len=2 (greeting)
-
-[TICK 50] Server RECV DATA seq=0
-[TICK 50] SEND ACK ack=1
-[TICK 50] ACCEPT new_session peer=2:12345
-
-[TICK 100] Client SEND len=1024
-[TICK 100] SEND DATA seq=1 len=1024
-
-[TICK 150] Server RECV DATA seq=1
-[TICK 150] SEND ACK ack=2
-[TICK 150] Server RECV len=1024
-
-Throughput: ~6.8 KB/s (simulated)
-Retransmissions: 0
-==================================================
+TODO
 ```
 
+#### Test Socket
+
+test code:
+```python
+def test_two_client_sockets_to_one_server():
+    simulator = PhySimulationEngine(time_step_us=1)
+
+    # 三个节点，其中 node2 做“服务器”
+    node1 = TestNode(simulator=simulator, mac_addr=1, name='node1')
+    node2 = TestNode(simulator=simulator, mac_addr=2, name='node2')
+    node3 = TestNode(simulator=simulator, mac_addr=3, name='node3')
+    switcher = Switcher(simulator=simulator, mac_addr=0, port_num=3, name='switcher')
+
+    # 信道与连接
+    cable = Cable(
+        length=100,
+        attenuation=3,
+        noise_level=4,
+        debug_mode=False,
+    )
+    print(f"\n{cable}")
+    tp1 = TwistedPair(cable=cable, simulator=simulator, ID=0)
+    tp2 = TwistedPair(cable=cable, simulator=simulator, ID=1)
+    tp3 = TwistedPair(cable=cable, simulator=simulator, ID=2)
+
+    node1.connect_to(tp1)
+    switcher.connect_to(port=0, twisted_pair=tp1)
+    node2.connect_to(tp2)
+    switcher.connect_to(port=1, twisted_pair=tp2)
+    node3.connect_to(tp3)
+    switcher.connect_to(port=2, twisted_pair=tp3)
+
+    # --- 准备 socket ---
+    # node2: 作为服务器，在 8080 端口监听
+    server_listen = node2.socket
+    server_listen.listen(num=5)
+
+    # node1: 两个客户端 socket，端口不同，分别连到 node2:8080
+    client_sock1 = socket(tcp_layer=node1.tcp_layer)
+    client_sock1.bind(10000)
+    client_sock1.setmode('debug')
+    client_sock2 = socket(tcp_layer=node1.tcp_layer)
+    client_sock2.bind(10001)
+    client_sock2.setmode('debug')
+    # --- 两个客户端依次发起连接并发送不同的数据 ---
+    msg1 = b'hello from client 1'
+    msg2 = b'hello from client 2'
+
+    client_sock1.connect(dst_mac=node2.mac_addr, dst_port=8080)
+    client_sock1.send(msg1)
+
+    client_sock2.connect(dst_mac=node2.mac_addr, dst_port=8080)
+    client_sock2.send(msg2)
+
+    # 运行一段时间，让报文都到达 node2
+    simulator.run(duration_ticks=5000)
+
+    # --- 服务器侧：accept 两次，拿到两个不同的连接 socket ---
+    conn1 = server_listen.accept()
+    conn2 = server_listen.accept()
+
+    print(f'conn1 session: {conn1.session}')
+    print(f'conn2 session: {conn2.session}')
+
+    assert conn1 is not None, "first accept() should return a connection socket"
+    assert conn2 is not None, "second accept() should return a connection socket"
+    assert conn1 is not conn2, "two accepted sockets should be different objects"
+    assert conn1.session is not conn2.session, "two connections should have different sessions"
+
+    # --- 从两个连接 socket 分别 recv，检查数据是否对应 ---
+    data1 = conn1.recv()
+    data2 = conn2.recv()
+
+    print("server conn1 recv:", data1)
+    print("server conn2 recv:", data2)
+
+    # 注意：顺序取决于谁先到达，这里只断言“集合相等”，不要求顺序
+    recv_set = {data1, data2}
+    expect_set = {msg1, msg2}
+    assert recv_set == expect_set, f"server should receive {expect_set}, but got {recv_set}"
+
+    # --- 可选：再从服务器回一条消息，看客户端是否各自能收到 ---
+    resp1 = b'response to client 1'
+    resp2 = b'response to client 2'
+    conn1.send(resp1)
+    conn2.send(resp2)
+
+    simulator.run(duration_ticks=5000)
+
+    c1_resp = client_sock1.recv()
+    c2_resp = client_sock2.recv()
+    print("client1 recv:", c1_resp)
+    print("client2 recv:", c2_resp)
+
+    client_sock1.send(b'ack from client 1')
+    client_sock2.send(b'ack from client 2')
+    simulator.run(duration_ticks=5000)
+
+    print("server conn1 recv after ack:", conn1.recv())
+    print("server conn2 recv after ack:", conn2.recv())
+
+    assert c1_resp == resp1
+    assert c2_resp == resp2
+```
+
+
+![*step1: server socket received message*](Fig/test_socket_0.png)
+
+![*step2: client socket received message*](Fig/test_socket_1.png)
 
 ## 3.4 Application Layer
 
@@ -1841,36 +2109,65 @@ Connection: close\r\n
 ### 3.4.5 Test Results
 
 ```
-==================================================
-HTTP Communication Test
-==================================================
-[server] HTTP Server started on port 80
-[client] HTTP Client initialized
-
-[TICK 100] client sends GET /
-[TICK 150] server receives: GET / HTTP/1.1
-[TICK 150] server sends: HTTP/1.1 200 OK
-[TICK 200] client receives response:
-           Status: 200 OK
-           Body: <html><body><h1>Welcome!</h1></body></html>
-
-[TICK 300] client sends GET /api/data
-[TICK 350] server receives: GET /api/data HTTP/1.1
-[TICK 350] server sends: HTTP/1.1 200 OK
-[TICK 400] client receives response:
-           Status: 200 OK
-           Body: {"value": 42}
-
-[TICK 500] client sends GET /notfound
-[TICK 550] server receives: GET /notfound HTTP/1.1
-[TICK 550] server sends: HTTP/1.1 404 Not Found
-[TICK 600] client receives response:
-           Status: 404 Not Found
-           Body: <h1>404 Not Found</h1>
-
-All requests completed successfully!
-==================================================
+TODO
 ```
+
+#### Test GET method
+
+test code:
+
+```python
+def test_http_communication():
+    """测试 HTTP 客户端和服务器通信"""
+    simulator = PhySimulationEngine(time_step_us=1)
+
+    server = HttpServer(simulator=simulator, mac_addr=3, name='server', port=80)
+    client = HttpClient(simulator=simulator, mac_addr=2, name='client')
+    
+    switcher = Switcher(simulator=simulator, mac_addr=0, port_num=2, name='switcher')
+
+    cable = Cable(length=100, attenuation=3, noise_level=3, debug_mode=False)
+    tp1 = TwistedPair(cable=cable, simulator=simulator, ID=0)
+    tp2 = TwistedPair(cable=cable, simulator=simulator, ID=1)
+
+    server.connect_to(tp1)
+    switcher.connect_to(port=0, twisted_pair=tp1)
+    client.connect_to(tp2)
+    switcher.connect_to(port=1, twisted_pair=tp2)
+
+    server.add_route('/api/data', lambda req: b'{"data": "test_value", "count": 42}')
+
+    responses = []
+
+    def on_response(resp):
+        responses.append(resp)
+        if resp:
+            print(f"Callback with {len(resp['raw'])} byte: status={resp['status_code']}, body={resp['body'][:100]}")
+
+    req1 = client.get(dst_mac=3, dst_port=80, path='/', callback=on_response)
+    req2 = client.get(dst_mac=3, dst_port=80, path='/hello', callback=on_response)
+    req3 = client.get(dst_mac=3, dst_port=80, path='/api/data', callback=on_response)
+    req4 = client.get(dst_mac=3, dst_port=80, path='/not_exist_?', callback=on_response)
+
+    simulator.run(duration_ticks=10000)
+
+    print("\n=== Test Results ===")
+    for i, resp in enumerate(responses):
+        if resp:
+            print(f"Response {i+1}: {resp['raw']}")
+
+    assert len(responses) == 4, f"Should receive 4 responses but got {len(responses)}"
+    
+    print("\n=== HTTP Test Passed ===")
+```
+
+
+
+![*client raises four parallel GET requests*](Fig/test_app_client_request.png)
+
+![*server parses and routes the requests respectively*](Fig/test_app_server_routing.png)
+
+![*client receives html pages*](Fig/test_app_client_result.png)
 
 
 
@@ -1888,6 +2185,7 @@ network-communication-project/
 
 # reference
 
-1. IEEE 802.3 Ethernet Standard
-2. RFC 793 - TCP Protocol
-3. Computer Networking - a top-down approach
+1. Wireless Communication
+2. IEEE 802.3 Ethernet Standard
+3. RFC 793 - TCP Protocol
+4. Computer Networking - a top-down approach

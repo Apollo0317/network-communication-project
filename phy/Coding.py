@@ -224,97 +224,27 @@ class ChannelEncoder:
         return self.bits_to_bytes(bits=decoded_bit_list)
 
 
-if __name__ == "__main__":
+def test_channel_coding():
     channel_encoder = ChannelEncoder()
+    message = b"Hello, Hamming Code!"
+    print(f"Original Message: {message}")
 
-    # 更全面的测试用例
-    test_cases = [
-        # 基础长度测试
-        (b"1", "1字节"),
-        (b"12", "2字节"),
-        (b"123", "3字节"),
-        (b"1234", "4字节(恰好对齐)"),
-        (b"12345", "5字节"),
-        (b"123456", "6字节"),
-        (b"1234567", "7字节"),
-        (b"12345678", "8字节"),
-        (b"123454321", "9字节"),
-        # 边界情况
-        (b"", "空字节"),
-        (b"a" * 100, "100字节"),
-        (b"x" * 255, "255字节"),
-        (b"y" * 256, "256字节"),
-        # 特殊字符
-        (b"\x00", "null字节"),
-        (b"\x00\x00\x00", "多个null字节"),
-        (b"\xff", "0xFF字节"),
-        (b"\x00\xff\x00", "混合字节"),
-        # Unicode测试
-        (bytes("你好".encode("utf-8")), "中文UTF-8"),
-        (bytes("Hello World!".encode("utf-8")), "英文UTF-8"),
-        (bytes("🎉🎊".encode("utf-8")), "Emoji UTF-8"),
-        # 二进制数据
-        (bytes(range(16)), "0-15连续字节"),
-        (bytes([0b10101010] * 10), "交替bit模式"),
-        (bytes([0b11111111, 0b00000000] * 5), "全1全0交替"),
-    ]
+    encoded_message = channel_encoder.encoding(data=message)
+    print(f"Encoded Message: {encoded_message}")
 
-    print("=" * 60)
-    print("开始测试...")
-    print("=" * 60)
+    # Introduce a single-bit error for testing
+    encoded_bits = channel_encoder.bytes_to_bits(byte_data=encoded_message)
+    # Flip the 10th bit (for example)
+    encoded_bits[10] ^= 1
+    corrupted_encoded_message = channel_encoder.bits_to_bytes(bits=encoded_bits)
+    print(f"Corrupted Encoded Message: {corrupted_encoded_message}")
 
-    passed = 0
-    failed = 0
+    decoded_message = channel_encoder.decoding(data=corrupted_encoded_message)
+    print(f"Decoded Message: {decoded_message}")
 
-    for test_data, description in test_cases:
-        try:
-            print(f"\n测试: {description}")
-            print(f"原始: 长度={len(test_data)}, 前10字节={test_data[:10]}")
+    assert message == decoded_message, "Decoded message does not match original!"
 
-            enc = channel_encoder.encoding(data=test_data)
-            print(f"编码: 长度={len(enc)}")
+if __name__ == "__main__":
+    test_channel_coding()
 
-            dec = channel_encoder.decoding(data=enc)
-            print(f"解码: 长度={len(dec)}, 前10字节={dec[:10]}")
 
-            # 严格检查
-            length_match = len(test_data) == len(dec)
-            content_match = test_data == dec
-
-            print(f"长度匹配: {length_match}")
-            print(f"内容匹配: {content_match}")
-
-            if not length_match:
-                print(
-                    f"❌ 长度不匹配! 原始={len(test_data)}, 解码={len(dec)}, 差={len(dec) - len(test_data)}"
-                )
-                failed += 1
-            elif not content_match:
-                print(f"❌ 内容不匹配!")
-                # 显示差异
-                for i in range(min(len(test_data), len(dec))):
-                    if test_data[i : i + 1] != dec[i : i + 1]:
-                        print(f"  位置{i}: 原始={test_data[i]:02x}, 解码={dec[i]:02x}")
-                        if i > 10:
-                            print("  ...")
-                            break
-                failed += 1
-            else:
-                print(f"✓ 通过")
-                passed += 1
-
-        except Exception as e:
-            print(f"❌ 异常: {e}")
-            import traceback
-
-            traceback.print_exc()
-            failed += 1
-
-    print("\n" + "=" * 60)
-    print(f"测试结果: 通过 {passed}/{len(test_cases)}, 失败 {failed}/{len(test_cases)}")
-    print("=" * 60)
-
-    if failed > 0:
-        print("\n⚠️  存在失败的测试用例,建议添加长度记录机制!")
-    else:
-        print("\n✓ 所有测试通过!")

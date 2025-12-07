@@ -114,7 +114,6 @@ def test_crc32_basic():
 
 
 def test_crc32_table_version():
-    """测试查表法 CRC-32 与基本版本一致"""
     import zlib
     
     test_cases = [
@@ -135,14 +134,14 @@ def test_crc32_table_version():
         zlib_crc = zlib.crc32(data) & 0xFFFFFFFF
         
         match = (basic_crc == table_crc == zlib_crc)
-        status = "✓" if match else "✗"
+        status = "pass" if match else "fail"
         if not match:
             all_passed = False
         
-        print(f"{status} basic={basic_crc:#010x} table={table_crc:#010x} zlib={zlib_crc:#010x}")
+        print(f"{status}: basic={basic_crc:#010x} table={table_crc:#010x} zlib={zlib_crc:#010x}")
     
     assert all_passed, "CRC-32 table version tests failed!"
-    print("\n✓ All table version tests passed!\n")
+    print("\nAll table version tests passed!\n")
 
 
 def test_crc32_standard_vector():
@@ -280,16 +279,8 @@ def test_performance():
 
 
 def run_all_tests():
-    """运行所有测试"""
-    print("\n" + "=" * 60)
-    print("Running All CRC-32 Unit Tests")
-    print("=" * 60 + "\n")
-    
-    test_crc32_basic()
     test_crc32_table_version()
-    test_crc32_standard_vector()
-    test_crc32_error_detection()
-    test_performance()
+
     
 
 

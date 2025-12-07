@@ -78,9 +78,9 @@ class PhySimulationEngine:
         
         print(f"\n{'='*60}")
         print(f"Starting simulation for {duration_ticks} ticks")
-        print(f"Time step: {self.time_step_us} μs/tick")
-        print(f"Total simulated time: {duration_ticks * self.time_step_us / 1e6:.6f} s")
-        print(f"entity num: {len(self.entities)}\n")
+        # print(f"Time step: {self.time_step_us} μs/tick")
+        # print(f"Total simulated time: {duration_ticks * self.time_step_us / 1e6:.6f} s")
+        # print(f"entity num: {len(self.entities)}\n")
         print(f"{'='*60}\n")
         
         for tick in range(duration_ticks):
@@ -113,9 +113,9 @@ class PhySimulationEngine:
         
         print(f"\n{'='*60}")
         print(f"Simulation completed!")
-        print(f"Simulated time: {simulated_time:.6f} s")
-        print(f"Wallclock time: {wallclock_time:.6f} s")
-        print(f"Simulation speed: {self.stats['simulation_speed']:.2f}x realtime")
+        # print(f"Simulated time: {simulated_time:.6f} s")
+        # print(f"Wallclock time: {wallclock_time:.6f} s")
+        # print(f"Simulation speed: {self.stats['simulation_speed']:.2f}x realtime")
         print(f"{'='*60}\n")
 
         self.reset()

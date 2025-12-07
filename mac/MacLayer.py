@@ -10,9 +10,13 @@ class MacLayer(ProtocolLayer):
         mode='node', 
         name:str='zero'
     ):
-        super().__init__(lower_layer=lower_layer,name=name, simulator=simulator)
+        super().__init__(lower_layer=lower_layer,name=name, simulator=simulator,debug_mode=True)
         self.ni= NetworkInterface(mac_addr=mac_addr, mode=mode, name=name)
         self.mac_addr= mac_addr
+
+    def debug_log(self, msg):
+        if self.debug_mode:
+            print(f"[TICK {self.simulator.current_tick}][{self.name}][MAC] {msg}")
 
     def Encapsulate(self, data: tuple):
         if len(data) == 3:
@@ -31,7 +35,7 @@ class MacLayer(ProtocolLayer):
         try:
             data= self.ni.decoding(frame=data)
         except ValueError as e:
-            print(f"[MAC Layer {self.name}] Frame decoding error: {e}")
+            self.debug_log(f"Frame decoding error: {e}")
             return None
         else:
             # if self.ni.mode == 'node':
