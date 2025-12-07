@@ -4,6 +4,9 @@ Modulator and DeModulator for 16-QAM scheme
 Provides phy layer interface
 """
 
+import sys
+sys.path.append("..")
+
 import numpy as np
 import math
 import matplotlib.pyplot as plt
@@ -11,16 +14,16 @@ from scipy import signal
 import json
 import time
 import numba
-from cable import Cable
+from phy.cable import Cable
 
 
 class Modulator:
     """
     16-QAM Modulator
-    
+
     Modulates byte data into QAM signals for physical layer transmission
     """
-    
+
     def __init__(
         self,
         scheme: str,
@@ -28,10 +31,11 @@ class Modulator:
         sample_rate: int,
         fc: int,
         power_factor: int = 100,
+        debug: bool = False,
     ):
         """
         Initialize the modulator
-        
+
         Args:
             scheme: Modulation scheme (e.g., "16QAM")
             symbol_rate: Symbol rate in symbols/second
@@ -46,16 +50,17 @@ class Modulator:
         self.mapping = Modulator.generate_QAM_mapping()
         self.has_estimated = False  # Flag for training symbol transmission
         self.power_factor = power_factor
+        self.debug = debug
         pass
 
     @staticmethod
     def bytes_to_bits(byte_data: bytes) -> list:
         """
         Convert byte data to bit list
-        
+
         Args:
             byte_data: Input byte data
-            
+
         Returns:
             Bit list, each byte converted to 8 bits (MSB first)
         """
@@ -69,13 +74,13 @@ class Modulator:
     def generate_QAM_mapping(order: int = 16) -> dict[str, list]:
         """
         Generate 16-QAM constellation mapping
-        
+
         Uses Gray coding to map 4 bits to I/Q channels (2 bits each)
         Constellation points: I, Q ∈ {-3, -1, 1, 3}
-        
+
         Args:
             order: QAM order, default 16
-            
+
         Returns:
             Mapping dictionary, key is bit list string, value is [I, Q] coordinates
         """
@@ -85,7 +90,7 @@ class Modulator:
             bit_list = [(code >> i) & 1 for i in range(3, -1, -1)]
             # First 2 bits map to I channel, last 2 bits map to Q channel
             I_bit, Q_bit = bit_list[:2], bit_list[2:]
-            
+
             # Gray coding mapping: 00->-3, 01->-1, 11->1, 10->3
             if I_bit == [0, 0]:
                 I_out = -3
@@ -95,7 +100,7 @@ class Modulator:
                 I_out = 1
             else:
                 I_out = 3
-                
+
             if Q_bit == [0, 0]:
                 Q_out = -3
             elif Q_bit == [0, 1]:
@@ -104,17 +109,17 @@ class Modulator:
                 Q_out = 1
             else:
                 Q_out = 3
-                
+
             mapping[str(bit_list)] = [I_out, Q_out]
         return mapping
 
     def Set_Frequency(self, fc: int):
         """
         Set carrier frequency
-        
+
         Args:
             fc: New carrier frequency in Hz
-            
+
         Raises:
             ValueError: Raised when frequency is negative
         """
@@ -126,12 +131,12 @@ class Modulator:
     def QAM(self, byte_data: bytes) -> list:
         """
         Map byte data to QAM symbols
-        
+
         Adds 4 training symbols at the beginning for channel estimation on first call
-        
+
         Args:
             byte_data: Input byte data
-            
+
         Returns:
             Symbol list, each symbol is [I, Q] coordinates
         """
@@ -139,53 +144,53 @@ class Modulator:
         bit_per_symbol = 4  # 16-QAM uses 4 bits per symbol
         length = len(bit_list)
         remain_bit = length % bit_per_symbol
-        
+
         # Zero padding to align to 4-bit boundaries
         if remain_bit:
             zero_pad = [0] * (bit_per_symbol - remain_bit)
             print(f"pad zero: {len(zero_pad)}")
             bit_list.extend(zero_pad)
-            
+
         # Group bits into chunks of 4
         grouped_bit_list = []
         for i in range(0, len(bit_list), bit_per_symbol):
             grouped_bit_list.append(
                 [bit_list[i], bit_list[i + 1], bit_list[i + 2], bit_list[i + 3]]
             )
-            
+
         # Generate symbols using mapping table
         symbols = [self.mapping.get(str(bit_group)) for bit_group in grouped_bit_list]
-        
+
         # Add training symbols on first transmission
         if not self.has_estimated:
             train_symbols = [[1, 3], [3, 1], [-1, -3], [-3, -1]]
             symbols = train_symbols + symbols
             self.has_estimated = True
-            print(
-                f"first send: add 4 symbol to estimate alpha\ntotal symbol:{len(symbols)}"
-            )
+            # print(
+            #     f"first send: add 4 symbol to estimate alpha\ntotal symbol:{len(symbols)}"
+            # )
         return symbols
 
     def QAM_UpConverter(self, symbols: list[list], debug=False) -> np.ndarray:
         """
         QAM upconverter: modulate baseband symbols to carrier frequency
-        
+
         Processing steps:
         1. Convert symbols to complex form
         2. Pulse shaping (currently using rectangular filter)
         3. Quadrature modulation to carrier
-        
+
         Args:
             symbols: Symbol list, each symbol is [I, Q]
             debug: Whether to plot debug waveforms
-            
+
         Returns:
             Modulated time-domain RF signal
         """
         # Convert to complex symbols
         symbols: list[complex] = [complex(symbol[0], symbol[1]) for symbol in symbols]
         complex_symbols = np.array(symbols, dtype=np.complex128)
-        
+
         # Calculate samples per symbol
         sps = self.sample_rate / self.symbol_rate
         I_baseband = np.real(complex_symbols)
@@ -248,22 +253,22 @@ class Modulator:
             plt.grid(True)
 
             plt.tight_layout()
-            plt.savefig("fig/signal.png")
+            plt.savefig("../report/Fig/signal.png")
 
         return qam_signal
 
     def modulate(self, data: bytes) -> np.ndarray:
         """
         Modulation entry function
-        
+
         Args:
             data: Byte data to be modulated
-            
+
         Returns:
             Modulated RF signal
         """
         symbols = self.QAM(byte_data=data)
-        signal = self.QAM_UpConverter(symbols=symbols, debug=False)
+        signal = self.QAM_UpConverter(symbols=symbols, debug=self.debug)
         signal = signal * self.power_factor  # Power amplification
         return signal
 
@@ -271,10 +276,10 @@ class Modulator:
 class DeModulator:
     """
     16-QAM Demodulator
-    
+
     Demodulates received QAM signals back to byte data
     """
-    
+
     def __init__(
         self,
         scheme: str,
@@ -282,10 +287,11 @@ class DeModulator:
         sample_rate: int,
         fc: int,
         power_factor: int = 100,
+        debug: bool = False,
     ):
         """
         Initialize the demodulator
-        
+
         Args:
             scheme: Modulation scheme
             symbol_rate: Symbol rate
@@ -302,14 +308,15 @@ class DeModulator:
         self.aplitude_loss: float = 0  # Channel amplitude loss
         self.has_estimated = False  # Channel estimation flag
         self.power_factor = power_factor
+        self.debug = debug
 
     def generate_QAM_mapping(order: int = 16) -> dict[str, list]:
         """
         Generate reverse QAM mapping (constellation points to bits)
-        
+
         Args:
             order: QAM order
-            
+
         Returns:
             Reverse mapping dictionary, key is [I,Q] coordinate string, value is bit list
         """
@@ -324,17 +331,17 @@ class DeModulator:
     def bits_to_bytes(bit_list: list[int]) -> bytes:
         """
         Convert bit list to bytes
-        
+
         Args:
             bit_list: Bit list
-            
+
         Returns:
             Byte data
         """
         bit_num = len(bit_list)
         byte_list = bytearray()
         byte_num = int(bit_num / 8)
-        
+
         for i in range(0, byte_num):
             bits_of_byte = bit_list[i * 8 : (i + 1) * 8]
             value = 0
@@ -349,11 +356,11 @@ class DeModulator:
     def distance(a: list[float, 2], b: list[float, 2]) -> float:
         """
         Calculate squared Euclidean distance between two constellation points
-        
+
         Args:
             a: First point [I, Q]
             b: Second point [I, Q]
-            
+
         Returns:
             Squared distance
         """
@@ -364,10 +371,10 @@ class DeModulator:
     def symbol_power(symbol: list[int, 2]) -> float:
         """
         Calculate symbol power
-        
+
         Args:
             symbol: Symbol [I, Q]
-            
+
         Returns:
             Symbol power I²+Q²
         """
@@ -376,12 +383,12 @@ class DeModulator:
     def Detect_Symbol(self, symbols: list[list]) -> list[int]:
         """
         Symbol detection: map received symbols back to bits
-        
+
         Uses minimum Euclidean distance decision, performs channel estimation on first reception
-        
+
         Args:
             symbols: Received symbol list
-            
+
         Returns:
             Detected bit list
         """
@@ -394,12 +401,12 @@ class DeModulator:
             std_train_symbols = [[1, 3], [3, 1], [-1, -3], [-3, -1]]
             recv_train_symbols = symbols[:4]
             symbols = symbols[4:]
-            
+
             # Calculate amplitude loss coefficient
             std_symbol_powers = map(self.symbol_power, std_train_symbols)
             recv_symbol_powers = map(self.symbol_power, recv_train_symbols)
             aplitude_loss = math.sqrt(sum(std_symbol_powers) / sum(recv_symbol_powers))
-            print(f"aplitude loss:{10 * math.log10(aplitude_loss)} dB")
+            #print(f"aplitude loss:{10 * math.log10(aplitude_loss)} dB")
             self.aplitude_loss = aplitude_loss
             self.has_estimated = True
 
@@ -424,16 +431,16 @@ class DeModulator:
     def QAM_DownConverter(self, qam_signal: np.ndarray, debug=True) -> list[list]:
         """
         QAM downconverter: demodulate RF signal to baseband symbols
-        
+
         Processing steps:
         1. Quadrature demodulation
         2. Low-pass filtering
         3. Symbol sampling
-        
+
         Args:
             qam_signal: Received QAM signal
             debug: Whether to plot debug waveforms
-            
+
         Returns:
             Demodulated symbol list
         """
@@ -441,11 +448,11 @@ class DeModulator:
         n = np.arange(lens)
         time = n / self.fs
         time_us = time * 1e6
-        
+
         # Generate local carrier
         carrier_cos = np.cos(2 * np.pi * self.fc * n / self.fs)
         carrier_sin = np.sin(2 * np.pi * self.fc * n / self.fs)
-        
+
         # Quadrature demodulation
         I_prime = qam_signal * carrier_cos
         Q_prime = qam_signal * carrier_sin
@@ -454,7 +461,7 @@ class DeModulator:
         order = 6
         f_cutoff = 2 * self.rs  # Cutoff frequency is 2x symbol rate
         Wn = f_cutoff / (self.fs / 2)  # Normalized frequency
-        b, a = signal.butter(order, Wn, 'low', analog=False)
+        b, a = signal.butter(order, Wn, "low", analog=False)
 
         # Filter and recover baseband (multiply by 2 to compensate mixing loss)
         I_baseband: list[float] = list(signal.filtfilt(b, a, I_prime) * 2)
@@ -473,7 +480,7 @@ class DeModulator:
             plt.title("Q(t)")
             plt.grid(True)
 
-            plt.savefig("fig/IQ.png")
+            plt.savefig("../report/Fig/IQ.png")
 
         # Symbol sampling: average over each symbol period
         symbol_num = int(lens / self.sps)
@@ -492,62 +499,39 @@ class DeModulator:
     def demodulate(self, signal: np.ndarray) -> bytes:
         """
         Demodulation entry function
-        
+
         Args:
             signal: Received RF signal
-            
+
         Returns:
             Demodulated byte data
         """
         signal = signal / self.power_factor  # Power normalization
-        symbols = self.QAM_DownConverter(qam_signal=signal, debug=False)
+        symbols = self.QAM_DownConverter(qam_signal=signal, debug=self.debug)
         bits = self.Detect_Symbol(symbols=symbols)
         byte_recovered = self.bits_to_bytes(bit_list=bits)
         return byte_recovered
 
 
-def test():
+def test_modulating():
     """
-    Test function: verify modulation and demodulation functionality
-    
-    Creates modulator and demodulator, transmits test data through Cable channel
+    Test modulation waveform generation
     """
     modulator = Modulator(
-        scheme="16QAM", symbol_rate=1e6, sample_rate=50e6, fc=2e6, power_factor=100
+        scheme="16QAM", symbol_rate=1e6, sample_rate=50e6, fc=2e6, power_factor=1, debug=True
     )
-    demodulator = DeModulator(
-        scheme="16QAM", symbol_rate=1e6, sample_rate=50e6, fc=2e6, power_factor=100
+    test_str = b"Hello!"
+    print(f"Original data: {test_str}")
+
+    signal = modulator.modulate(data=test_str)
+
+    demodulator= DeModulator(
+        scheme="16QAM", symbol_rate=1e6, sample_rate=50e6, fc=2e6, power_factor=1, debug=True
     )
-    test_str = b"Happy New Year!"
-    start_time = time.time()
-    
-    # Create transmission channel
-    cable = Cable(
-        length=100,  # 100 meters
-        attenuation=3,  # Attenuation coefficient
-        noise_level=3,  # Noise level
-        debug_mode=False,
-    )
-    print(f"\n{cable}")
-    
-    test_sample_num = 1024
+    recovered_data = demodulator.demodulate(signal=signal)
+    print(f"Recovered data: {recovered_data}")
 
-    # Transmit through channel
-    for i in range(test_sample_num):
-        # Modulation
-        qam_signal = modulator.modulate(data=test_str)
-        recv_signal = cable.transmit(signal=qam_signal)
-        
-        # Demodulation
-        recv_str = demodulator.demodulate(signal=recv_signal)
-        
-        print(f"{i}th: orig:{test_str[:64]}")
-        print(f"{i}th: recv:{recv_str[:64]}")
-
-    cost = time.time() - start_time
-
-    print(f"{test_sample_num*len(test_str) / 1000 / cost} KBps")
-
+    assert recovered_data.startswith(test_str), "Data recovery failed!"
 
 if __name__ == "__main__":
-    test()
+    test_modulating()
