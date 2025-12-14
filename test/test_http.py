@@ -39,7 +39,7 @@ def test_http_communication():
     req3 = client.get(dst_mac=3, dst_port=80, path='/api/data', callback=on_response)
     req4 = client.get(dst_mac=3, dst_port=80, path='/not_exist_?', callback=on_response)
 
-    simulator.run(duration_ticks=10000)
+    simulator.run(duration_ticks=12000)
 
     print("\n=== Test Results ===")
     for i, resp in enumerate(responses):

@@ -1,7 +1,7 @@
 from core import ProtocolLayer, PhySimulationEngine
 from phy.modulator import Modulator, DeModulator
 from phy.entity import TxEntity, RxEntity, TwistedPair
-from phy.Coding import ChannelEncoder
+# from phy.Coding import ChannelEncoder
 
 
 class PhyLayer(ProtocolLayer):
@@ -19,12 +19,12 @@ class PhyLayer(ProtocolLayer):
         demodulator = DeModulator(
             scheme="16QAM", symbol_rate=1e6, sample_rate=50e6, fc=2e6, power_factor=100
         )
-        self.tx_entity = TxEntity(modulator=modulator, name=name + "_phy_tx")
-        self.rx_entity = RxEntity(demodulator=demodulator, name=name + "_phy_rx")
+        self.tx_entity = TxEntity(modulator=modulator, name=name + "_phy_tx", coding=coding)
+        self.rx_entity = RxEntity(demodulator=demodulator, name=name + "_phy_rx", coding=coding)
         simulator.register_entity(entity=self.tx_entity)
         simulator.register_entity(entity=self.rx_entity)
-        self.channel_encoder = ChannelEncoder()
-        self.use_channel_coding = coding
+        # self.coding = coding
+
 
     def connect_to(self, twisted_pair: TwistedPair):
         twisted_pair.connect(tx_interface=self.tx_entity, rx_interface=self.rx_entity)
@@ -37,16 +37,16 @@ class PhyLayer(ProtocolLayer):
         """
         imply channel coding
         """
-        if self.use_channel_coding:
-            return self.channel_encoder.encoding(data=data)
+        # if self.use_channel_coding:
+        #     return self.channel_encoder.encoding(data=data)
         return data
 
     def Dencapsulate(self, data):
         """
         imply channel decoding
         """
-        if self.use_channel_coding:
-            return self.channel_encoder.decoding(data=data)
+        # if self.use_channel_coding:
+        #     return self.channel_encoder.decoding(data=data)
         return data
 
     def update(self, tick):

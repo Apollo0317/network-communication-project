@@ -98,7 +98,7 @@ def test_switcher_mac_learning():
     cable = Cable(
         length=100,
         attenuation=4,
-        noise_level=3,
+        noise_level=4,
         debug_mode=False,
     )
     print(f"\n{cable}")
@@ -149,7 +149,7 @@ def test_three_nodes_communicate_via_switcher():
     cable = Cable(
         length=100,
         attenuation=4,
-        noise_level=3,
+        noise_level=4,
         debug_mode=False,
     )
     print(f"\n{cable}")

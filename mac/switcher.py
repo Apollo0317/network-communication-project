@@ -47,27 +47,27 @@ class Switcher(SimulationEntity):
 
     def update(self, tick: int):
         super().update(tick)
-        if tick % 10 == 0:
-            for i in range(self.port_num):
-                socket_layer = self.socket_list[i]
-                result = socket_layer.recv()
-                if result:
-                    src_mac, dst_mac, data = result
-                    if src_mac not in self.map:
-                        # passive learning
-                        self.map[src_mac] = i
-                        self.debug_log(f"Switcher learned MAC {src_mac} is at port {i}")
-                        if len(self.map) == self.port_num:
-                            self.debug_log(f"Switcher MAC table full: {self.map}")
-                    dst_port = self.map.get(dst_mac)
-                    if dst_port is not None:
-                        dst_port_socket_layer = self.socket_list[dst_port]
-                        dst_port_socket_layer.send((src_mac,dst_mac, data))
-                    else:
-                        # flood sending
-                        for j in range(self.port_num):
-                            if j != i:
-                                flood_socket_layer = self.socket_list[j]
-                                flood_socket_layer.send((src_mac,dst_mac, data))
+        # if tick % 10 == 0:
+        for i in range(self.port_num):
+            socket_layer = self.socket_list[i]
+            result = socket_layer.recv()
+            if result:
+                src_mac, dst_mac, data = result
+                if src_mac not in self.map:
+                    # passive learning
+                    self.map[src_mac] = i
+                    self.debug_log(f"Switcher learned MAC {src_mac} is at port {i}")
+                    if len(self.map) == self.port_num:
+                        self.debug_log(f"Switcher MAC table full: {self.map}")
+                dst_port = self.map.get(dst_mac)
+                if dst_port is not None:
+                    dst_port_socket_layer = self.socket_list[dst_port]
+                    dst_port_socket_layer.send((src_mac,dst_mac, data))
+                else:
+                    # flood sending
+                    for j in range(self.port_num):
+                        if j != i:
+                            flood_socket_layer = self.socket_list[j]
+                            flood_socket_layer.send((src_mac,dst_mac, data))
 
-                        pass
+                    pass

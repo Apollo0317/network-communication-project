@@ -12,7 +12,6 @@ import math
 import matplotlib.pyplot as plt
 from scipy import signal
 import json
-import time
 import numba
 from phy.cable import Cable
 
@@ -51,6 +50,7 @@ class Modulator:
         self.has_estimated = False  # Flag for training symbol transmission
         self.power_factor = power_factor
         self.debug = debug
+        self.train_symbols = [[1, 3], [3, 1], [-1, -3], [-3, -1]]
         pass
 
     @staticmethod
@@ -161,11 +161,10 @@ class Modulator:
         # Generate symbols using mapping table
         symbols = [self.mapping.get(str(bit_group)) for bit_group in grouped_bit_list]
 
-        # Add training symbols on first transmission
-        if not self.has_estimated:
-            train_symbols = [[1, 3], [3, 1], [-1, -3], [-3, -1]]
-            symbols = train_symbols + symbols
-            self.has_estimated = True
+        # # Add training symbols on first transmission
+        # if not self.has_estimated:
+        symbols = self.train_symbols + symbols
+            # self.has_estimated = True
             # print(
             #     f"first send: add 4 symbol to estimate alpha\ntotal symbol:{len(symbols)}"
             # )
@@ -262,7 +261,7 @@ class Modulator:
         Modulation entry function
 
         Args:
-            data: Byte data to be modulated
+            data: phy frame to be modulated
 
         Returns:
             Modulated RF signal
@@ -309,6 +308,7 @@ class DeModulator:
         self.has_estimated = False  # Channel estimation flag
         self.power_factor = power_factor
         self.debug = debug
+        self.train_symbols = [[1, 3], [3, 1], [-1, -3], [-3, -1]]
 
     def generate_QAM_mapping(order: int = 16) -> dict[str, list]:
         """
@@ -352,7 +352,7 @@ class DeModulator:
         return bytes(byte_list)
 
     @staticmethod
-    @numba.njit
+    # @numba.njit
     def distance(a: list[float, 2], b: list[float, 2]) -> float:
         """
         Calculate squared Euclidean distance between two constellation points
@@ -367,7 +367,6 @@ class DeModulator:
         return (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2
 
     @staticmethod
-    @numba.njit
     def symbol_power(symbol: list[int, 2]) -> float:
         """
         Calculate symbol power
@@ -397,18 +396,18 @@ class DeModulator:
         symbol_list: list[list] = [json.loads(symbol) for symbol in symbol_list]
 
         # Channel estimation using training symbols on first reception
-        if not self.has_estimated:
-            std_train_symbols = [[1, 3], [3, 1], [-1, -3], [-3, -1]]
-            recv_train_symbols = symbols[:4]
-            symbols = symbols[4:]
+        # if not self.has_estimated:
+        std_train_symbols = self.train_symbols
+        recv_train_symbols = symbols[:4]
+        symbols = symbols[4:]
 
-            # Calculate amplitude loss coefficient
-            std_symbol_powers = map(self.symbol_power, std_train_symbols)
-            recv_symbol_powers = map(self.symbol_power, recv_train_symbols)
-            aplitude_loss = math.sqrt(sum(std_symbol_powers) / sum(recv_symbol_powers))
-            #print(f"aplitude loss:{10 * math.log10(aplitude_loss)} dB")
-            self.aplitude_loss = aplitude_loss
-            self.has_estimated = True
+        # Calculate amplitude loss coefficient
+        std_symbol_powers = map(self.symbol_power, std_train_symbols)
+        recv_symbol_powers = map(self.symbol_power, recv_train_symbols)
+        aplitude_loss = math.sqrt(sum(std_symbol_powers) / sum(recv_symbol_powers))
+        # print(f"aplitude loss:{10 * math.log10(aplitude_loss)} dB")
+        self.aplitude_loss = aplitude_loss
+        # self.has_estimated = True
 
         # Compensate for channel loss
         fixed_symbols = []
@@ -504,7 +503,7 @@ class DeModulator:
             signal: Received RF signal
 
         Returns:
-            Demodulated byte data
+            Demodulated phy frame
         """
         signal = signal / self.power_factor  # Power normalization
         symbols = self.QAM_DownConverter(qam_signal=signal, debug=self.debug)
@@ -518,17 +517,29 @@ def test_modulating():
     Test modulation waveform generation
     """
     modulator = Modulator(
-        scheme="16QAM", symbol_rate=1e6, sample_rate=50e6, fc=2e6, power_factor=1, debug=True
+        scheme="16QAM", symbol_rate=1e6, sample_rate=50e6, fc=2e6, power_factor=100, debug=True
     )
-    test_str = b"Hello!"
+    test_str = b"Hello, World!"*10
     print(f"Original data: {test_str}")
 
     signal = modulator.modulate(data=test_str)
 
-    demodulator= DeModulator(
-        scheme="16QAM", symbol_rate=1e6, sample_rate=50e6, fc=2e6, power_factor=1, debug=True
+    cable = Cable(
+        length= 100,
+        attenuation= 3.8,
+        noise_level= 4,
+        debug_mode= False,
     )
-    recovered_data = demodulator.demodulate(signal=signal)
+
+    rx_signal = cable.transmit(signal=signal)
+
+    snr= cable._calculate_snr()
+    print(f"Calculated SNR over the cable: {snr} dB")
+
+    demodulator= DeModulator(
+        scheme="16QAM", symbol_rate=1e6, sample_rate=50e6, fc=2e6, power_factor=100, debug=True
+    )
+    recovered_data = demodulator.demodulate(signal=rx_signal)
     print(f"Recovered data: {recovered_data}")
 
     assert recovered_data.startswith(test_str), "Data recovery failed!"

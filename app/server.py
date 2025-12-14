@@ -57,7 +57,7 @@ class HttpServer(SimulationEntity):
             tx_interface=self.phy_layer.tx_entity,
             rx_interface=self.phy_layer.rx_entity
         )
-        print(f'[{self.name}] connected to {twisted_pair}')
+        print(f'[TICK {self.name}] connected to {twisted_pair}')
 
     def _parse_http_request(self, data: bytes) -> Optional[dict]:
         """解析 HTTP 请求"""
@@ -136,7 +136,7 @@ class HttpServer(SimulationEntity):
             response = self._build_http_response(404, b"<h1>404 Not Found</h1>")
         
         conn.send(response)
-        print(f'[{self.name}] send Response: {response[:50]}...')
+        print(f'[TICK {self.current_tick}][{self.name}] send Response: {response[:50]}...')
 
     def update(self, tick):
         super().update(tick)
@@ -145,7 +145,7 @@ class HttpServer(SimulationEntity):
         if new_conn is not None:
             # new_conn.setmode('debug')
             self.connections.append(new_conn)
-            print(f"[{self.name}] New connection accepted at {new_conn.locol_port}")
+            print(f"[TICK {self.current_tick}][{self.name}] New connection accepted at {new_conn.locol_port}")
         
         for conn in self.connections[:]:  # 用切片避免迭代时修改
             data = conn.recv(4096)

@@ -8,6 +8,7 @@ import numpy as np
 from core import SimulationEntity, PhySimulationEngine
 from phy.cable import Cable
 from phy.modulator import Modulator, DeModulator
+from phy.Coding import ChannelEncoder
 
 
 class ChannelEntity(SimulationEntity):
@@ -62,80 +63,145 @@ class ChannelEntity(SimulationEntity):
 
 
 class TxEntity(SimulationEntity):
-    """Transmitter entity"""
-
-    def __init__(self, modulator:Modulator, name: str = "Transmitter"):
+    """Transmitter entity with slicing support"""
+    
+    PHY_MTU = 256  # 物理层最大传输单元
+    
+    def __init__(self, modulator: Modulator, name: str = "Transmitter", coding: bool=True):
         super().__init__(name)
         self.modulator = modulator
         self.tx_buffer = deque()
         self.connected_channel: Optional[ChannelEntity] = None
-
         self.is_transmitting = False
         self.transmission_end_tick = 0
-
         self.stats = {"bytes_sent": 0, "packets_sent": 0}
-
-    def connect_to_channel(self, channel: ChannelEntity):
-        self.connected_channel = channel
-
+        if coding:
+            self.encoder= ChannelEncoder()
+            self.coding= True
+        else:
+            self.coding= False
+        
+        # frame counter
+        self._frame_id = 0
+    
     def enqueue_data(self, data: bytes):
-        self.tx_buffer.append(data)
+        slices = self._slice_data(data)
+        #print(f"[{self.name}] Enqueued {len(slices)} slices for data of length {len(data)}")
+        for s in slices:
+            if self.coding:
+                s= self.encoder.encoding(s)
+            self.tx_buffer.append(s)
+    
+    def _slice_data(self, data: bytes) -> list[bytes]:
+        """
+        frame format: [1B frame_id][1B seq][1B total][payload]
+        """
+        if len(data) <= self.PHY_MTU - 3:
+            header = bytes([self._frame_id & 0xFF, 0, 1])
+            self._frame_id += 1
+            return [header + data]
+        
+        payload_size = self.PHY_MTU - 3
+        total = (len(data) + payload_size - 1) // payload_size
+        slices = []
+        
+        for seq in range(total):
+            start = seq * payload_size
+            end = min(start + payload_size, len(data))
+            # print(f"[{self.name}] Slicing data: slice {seq+1}/{total}, bytes")
+            header = bytes([self._frame_id & 0xFF, seq, total])
+            slices.append(header + data[start:end])
+        
+        self._frame_id += 1
+        return slices
 
     def update(self, tick: int):
         super().update(tick)
 
-        # 1. 检查是否正在传输中 (模拟传输时延)
+
         if self.is_transmitting:
             if tick >= self.transmission_end_tick:
                 self.is_transmitting = False
             else:
-                return  # 正在忙，不能发送下一个包
+                return  
 
-        # 2. 如果空闲且有数据，开始发送
         if self.tx_buffer and self.connected_channel:
             data = self.tx_buffer.popleft()
 
-            # 调制
             signal = self.modulator.modulate(data)
 
-            # 计算传输时延 (Transmission Delay) = 样本数 / 采样率
-            # 假设 time_step_us = 1.0 (需要在外部保证或传入)
-            # 这里简化处理，假设 tick = 1us
-            # 信号长度 / 50MHz = 秒数 -> 换算成 us (ticks)
             duration_sec = len(signal) / self.modulator.sample_rate
             duration_ticks = int(duration_sec * 1e6)
 
-            # 设置忙碌状态
             self.is_transmitting = True
             self.transmission_end_tick = tick + duration_ticks
 
-            # 将信号推入信道
             self.connected_channel.accept_signal(signal, tick)
 
             self.stats["bytes_sent"] += len(data)
             self.stats["packets_sent"] += 1
+    
+    def connect_to_channel(self, channel: ChannelEntity):
+        self.connected_channel = channel
 
     def get_stats(self):
         return self.stats
 
 
 class RxEntity(SimulationEntity):
-    """Receiver entity"""
-
-    def __init__(self, demodulator:DeModulator, name: str = "Receiver"):
+    """Receiver entity with reassembly support"""
+    
+    def __init__(self, demodulator: DeModulator, name: str = "Receiver", coding: bool=True):
         super().__init__(name)
         self.demodulator = demodulator
-        self.rx_buffer = deque()  # 存放解调后的字节流
+        self.rx_buffer = deque()
         self.stats = {"bytes_received": 0}
+        
+        # frame_id -> {seq: payload}
+        self._reassembly_buffer: dict[int, dict[int, bytes]] = {}
 
+        if coding:
+            self.encoder= ChannelEncoder()
+            self.coding= True
+        else:
+            self.coding= False
+        # self._expected_total: dict[int, int] = {}
+    
     def on_signal_arrival(self, signal: np.ndarray):
-        """回调函数：当信道有信号送达时被调用"""
-        # 立即解调 (或者放入缓冲区等待 update 处理，取决于是否模拟接收处理延迟)
-        # 这里简化为立即解调
         data = self.demodulator.demodulate(signal)
-        self.rx_buffer.append(data)
-        self.stats["bytes_received"] += len(data)
 
+        if self.coding:
+            data= self.encoder.decoding(data)
+
+        if not data or len(data) < 3:
+            return
+        
+        frame_id, seq, total = data[0], data[1], data[2]
+        payload = data[3:]
+        
+        if total == 1:
+            self.rx_buffer.append(payload)
+            self.stats["bytes_received"] += len(payload)
+            return
+        
+        # new buffer for this frame_id
+        if frame_id not in self._reassembly_buffer:
+            self._reassembly_buffer[frame_id] = {}
+        
+        self._reassembly_buffer[frame_id][seq] = payload
+        print(f"[{self.name}] Received slice {seq+1}/{total} for frame {frame_id}")
+        
+        # check completion
+        if len(self._reassembly_buffer[frame_id]) == total:
+            # reassemble
+            complete_data = b"".join(
+                self._reassembly_buffer[frame_id][i] for i in range(total)
+            )
+            self.rx_buffer.append(complete_data)
+            self.stats["bytes_received"] += len(complete_data)
+            
+            del self._reassembly_buffer[frame_id]
+    
     def get_received_data(self) -> Optional[bytes]:
         if self.rx_buffer:
             return self.rx_buffer.popleft()
@@ -167,10 +233,8 @@ class TwistedPair:
 
     def connect(self, tx_interface: TxEntity, rx_interface: RxEntity):
         """
-        将物理层接口连接到双绞线。
-        自动处理交叉连接：
-        - 第1个设备:Tx -> Channel A, Channel B -> Rx
-        - 第2个设备:Tx -> Channel B, Channel A -> Rx
+        - device 1:Tx -> Channel A, Channel B -> Rx
+        - device 2:Tx -> Channel B, Channel A -> Rx
         """
         if self.connected_count == 0:
             tx_interface.connect_to_channel(self.channel_a)

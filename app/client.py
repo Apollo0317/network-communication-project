@@ -150,7 +150,7 @@ class HttpClient(SimulationEntity):
         sock.send(http_data)
         
         self.pending_requests.append(req)
-        print(f"[{self.name}] {method} request sent to {dst_mac}:{dst_port}{path}")
+        print(f"[TICK {self.current_tick}][{self.name}] {method} request sent to {dst_mac}:{dst_port}{path}")
         
         return req
 
@@ -169,7 +169,7 @@ class HttpClient(SimulationEntity):
                 req.state = RequestState.COMPLETED
                 
                 if response:
-                    print(f"[{self.name}] Response received: {response['raw']}\n")
+                    print(f"[TICK {self.current_tick}][{self.name}] Response received: {response['raw']}\n")
                 
                 # 调用回调
                 if req.callback:

@@ -1,6 +1,8 @@
 ---
 title: "a down-top LAN simulating system"
-author: "Apollo"
+author: |
+  LinYiFei \
+  \href{https://github.com/Apollo0317/network-communication-project}{github.com/Apollo0317/network-communication-project}
 date: "2025.12.6"
 geometry: margin=2.5cm
 fontsize: 11pt
@@ -8,9 +10,10 @@ CJKmainfont: "WenQuanYi Zen Hei"
 documentclass: article
 header-includes:
   - \usepackage{fancyhdr}
-  - \pagestyle{fancy}
   - \usepackage{float}
+  - \usepackage{hyperref}
   - \floatplacement{figure}{H}
+  - \pagestyle{fancy}
 ---
 
 # 1. Introduction
@@ -859,9 +862,6 @@ def connect_to(self, port: int, twisted_pair: TwistedPair):
 
 ### 3.2.3 Test Results
 
-```
-TODO
-```
 
 #### Test CRC32
 
