@@ -45,16 +45,17 @@ class TestNode(SimulationEntity):
 
 def test_p2p_communication():
     simulator= PhySimulationEngine()
+    simulator.set_debug(False)
 
     node_a= TestNode(simulator=simulator, name='NodeA')
     node_b= TestNode(simulator=simulator, name='NodeB')
 
-    test_msg= generate_random_data(length= 1024)  # 64KB random data
+    test_msg= generate_random_data(length= 1024*16)  # 64KB random data
     print(f'NodeA sending {len(test_msg)} bytes:\n')
 
     cable = Cable(
         length= 100,
-        attenuation= 4,
+        attenuation= 3.5,
         noise_level= 4,
         debug_mode= False,
     )

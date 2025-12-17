@@ -162,12 +162,8 @@ class Modulator:
         symbols = [self.mapping.get(str(bit_group)) for bit_group in grouped_bit_list]
 
         # # Add training symbols on first transmission
-        # if not self.has_estimated:
         symbols = self.train_symbols + symbols
-            # self.has_estimated = True
-            # print(
-            #     f"first send: add 4 symbol to estimate alpha\ntotal symbol:{len(symbols)}"
-            # )
+
         return symbols
 
     def QAM_UpConverter(self, symbols: list[list], debug=False) -> np.ndarray:
@@ -405,9 +401,7 @@ class DeModulator:
         std_symbol_powers = map(self.symbol_power, std_train_symbols)
         recv_symbol_powers = map(self.symbol_power, recv_train_symbols)
         aplitude_loss = math.sqrt(sum(std_symbol_powers) / sum(recv_symbol_powers))
-        # print(f"aplitude loss:{10 * math.log10(aplitude_loss)} dB")
         self.aplitude_loss = aplitude_loss
-        # self.has_estimated = True
 
         # Compensate for channel loss
         fixed_symbols = []

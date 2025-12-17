@@ -14,18 +14,18 @@ import abc
 
 
 class SimulationEntity(abc.ABC):
-    """仿真实体基类"""
+    """simulation entity"""
     
     def __init__(self, name: str):
         self.name = name
         self.current_tick = 0
     
     def update(self, tick: int):
-        """每个时间步调用一次"""
+        """called every tick"""
         self.current_tick = tick
     
     def reset(self):
-        """重置实体状态"""
+        """reset entity state"""
         self.current_tick = 0
 
     def set_name(self, name:str):
@@ -60,6 +60,11 @@ class PhySimulationEngine:
             'total_time_s': 0.0,
             'simulation_speed': 0.0  # 仿真速度倍数（仿真时间/墙钟时间）
         }
+
+        self.debug= True
+
+    def set_debug(self, debug: bool):
+        self.debug= debug
     
     def register_entity(self, entity: SimulationEntity):
         """注册一个实体到仿真引擎"""
@@ -76,17 +81,18 @@ class PhySimulationEngine:
         self.running = True
         start_wallclock = time.time()
         
-        print(f"\n{'='*60}")
-        print(f"Starting simulation for {duration_ticks} ticks")
-        # print(f"Time step: {self.time_step_us} μs/tick")
-        # print(f"Total simulated time: {duration_ticks * self.time_step_us / 1e6:.6f} s")
-        # print(f"entity num: {len(self.entities)}\n")
-        print(f"{'='*60}\n")
+        if self.debug:
+            print(f"\n{'='*60}")
+            print(f"Starting simulation for {duration_ticks} ticks")
+            print(f"Time step: {self.time_step_us} μs/tick")
+            print(f"Total simulated time: {duration_ticks * self.time_step_us / 1e6:.6f} s")
+            print(f"entity num: {len(self.entities)}\n")
+            print(f"{'='*60}\n")
         
         for tick in range(duration_ticks):
             self.current_tick = tick
             
-            # 更新所有实体
+            # update all entities
             update_results= [entity.update(tick) for entity in self.entities]
             # 检查是否有实体请求提前结束仿真
             if any(result == 1 for result in update_results):
@@ -111,14 +117,16 @@ class PhySimulationEngine:
         self.stats['total_time_s'] = simulated_time
         self.stats['simulation_speed'] = simulated_time / wallclock_time if wallclock_time > 0 else 0
         
-        print(f"\n{'='*60}")
-        print(f"Simulation completed!")
-        # print(f"Simulated time: {simulated_time:.6f} s")
-        # print(f"Wallclock time: {wallclock_time:.6f} s")
-        # print(f"Simulation speed: {self.stats['simulation_speed']:.2f}x realtime")
-        print(f"{'='*60}\n")
 
-        self.reset()
+        if self.debug:
+            print(f"\n{'='*60}")
+            print(f"Simulation completed!")
+            print(f"Simulated time: {simulated_time:.6f} s")
+            print(f"Wallclock time: {wallclock_time:.6f} s")
+            print(f"Simulation speed: {self.stats['simulation_speed']:.2f}x realtime")
+            print(f"{'='*60}\n")
+
+        # self.reset()
         
         self.running = False
     

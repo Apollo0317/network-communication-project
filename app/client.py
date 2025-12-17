@@ -155,7 +155,6 @@ class HttpClient(SimulationEntity):
         return req
 
     def update(self, tick):
-        """非阻塞式更新循环 - 轮询检查响应"""
         super().update(tick)
         
         for req in self.pending_requests[:]:

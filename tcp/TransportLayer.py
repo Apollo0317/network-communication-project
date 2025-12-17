@@ -55,7 +55,13 @@ class TransportLayer_GBN(ProtocolLayer):
         # debug 开关
         self.debug_mode: bool = False
 
-    # 简单的调试打印工具
+    
+    def setmode(self, mode: str):
+        if mode == 'debug':
+            self.debug_mode = True
+        else:
+            self.debug_mode = False
+
     def debug_log(self, msg: str):
         if self.debug_mode:
             print(f"[TICK {self.simulator.current_tick}][{self.name}] {msg}")
@@ -231,7 +237,7 @@ class TransportLayer_GBN(ProtocolLayer):
 
     def update(self, tick):
         """
-        3. Timeout Retransmission: 检查超时并重传
+        Timeout Retransmission: 检查超时并重传
         """
         super().update(tick)
 

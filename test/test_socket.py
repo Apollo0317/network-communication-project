@@ -34,11 +34,62 @@ class TestNode(SimulationEntity):
     def update(self, tick):
         super().update(tick)
 
+def test_tcp_reliable_transfer():
+    simulator = PhySimulationEngine(time_step_us=1)
+
+    # 两个节点
+    node1 = TestNode(simulator=simulator, mac_addr=1, name='node1')
+    node2 = TestNode(simulator=simulator, mac_addr=2, name='node2')
+
+    node1.tcp_layer.setmode('debug')
+    node2.tcp_layer.setmode('debug')
+
+    # 信道与连接
+    cable = Cable(
+        length=100,
+        attenuation=4,
+        noise_level=4.5,
+        debug_mode=False,
+    )
+    print(f"\n{cable}")
+
+    tp1 = TwistedPair(cable=cable, simulator=simulator, ID=0)
+
+    node1.connect_to(tp1)
+    node2.connect_to(tp1)
+
+    # node2: 作为服务器，在 8080 端口监听
+    server_sock = node2.socket
+    server_sock.listen(num=5)
+    server_sock.setmode('debug')
+
+    # node1: 作为客户端，连接到 node2:8080
+    client_sock = node1.socket
+    client_sock.bind(10000)
+    client_sock.setmode('debug')
+    client_sock.connect(dst_mac=node2.mac_addr, dst_port=8080)
+
+    # 发送数据
+    msg = b'hello, this is a test message for TCP reliable transfer.'*2
+    print("\nclient send:", msg, '\n')
+    client_sock.send(msg)
+
+    # 运行一段时间，让报文到达 node2
+    simulator.run(duration_ticks=10000)
+
+    # 服务器侧：accept，拿到连接 socket
+    conn = server_sock.accept()
+    assert conn is not None, "accept() should return a connection socket"
+
+    # 服务器侧：recv 数据
+    data = conn.recv()
+    print("\nserver recv:", data, '\n')
+    assert data == msg, f"server should receive {msg}, but got {data}"
 
 def test_two_client_sockets_to_one_server():
     simulator = PhySimulationEngine(time_step_us=1)
 
-    # 三个节点，其中 node2 做“服务器”
+    # 三个节点，其中 node2 做服务器
     node1 = TestNode(simulator=simulator, mac_addr=1, name='node1')
     node2 = TestNode(simulator=simulator, mac_addr=2, name='node2')
     node3 = TestNode(simulator=simulator, mac_addr=3, name='node3')
@@ -63,7 +114,6 @@ def test_two_client_sockets_to_one_server():
     node3.connect_to(tp3)
     switcher.connect_to(port=2, twisted_pair=tp3)
 
-    # --- 准备 socket ---
     # node2: 作为服务器，在 8080 端口监听
     server_listen = node2.socket
     server_listen.listen(num=5)
@@ -107,12 +157,10 @@ def test_two_client_sockets_to_one_server():
     print("server conn1 recv:", data1)
     print("server conn2 recv:", data2)
 
-    # 注意：顺序取决于谁先到达，这里只断言“集合相等”，不要求顺序
     recv_set = {data1, data2}
     expect_set = {msg1, msg2}
     assert recv_set == expect_set, f"server should receive {expect_set}, but got {recv_set}"
 
-    # --- 可选：再从服务器回一条消息，看客户端是否各自能收到 ---
     resp1 = b'response to client 1'
     resp2 = b'response to client 2'
     conn1.send(resp1)
@@ -137,4 +185,4 @@ def test_two_client_sockets_to_one_server():
 
 
 if __name__ == "__main__":
-    test_two_client_sockets_to_one_server()
+    test_tcp_reliable_transfer()
